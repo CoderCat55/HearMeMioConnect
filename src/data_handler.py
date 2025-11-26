@@ -28,7 +28,7 @@ class DataHandler:
         builder = udp_client.OscMessageBuilder("/myo/emg")
         builder.add_arg(str(conn), 's')
         for i in struct.unpack('<8b ', data):
-            builder.add_arg(i / 127, 'i')  # Normalize
+            builder.add_arg(i / 127, 'f')  # Normalize  #changed this to f because it was giving an eror
         self.osc.send(builder.build())
 
     def handle_imu(self, payload):
