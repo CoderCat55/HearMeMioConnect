@@ -1,5 +1,6 @@
 from src.myodriver import MyoDriver
 from src.config import Config
+from csv_logger import CSVLogger
 import serial
 import getopt
 import sys
@@ -7,10 +8,11 @@ import sys
 
 def main(argv):
     config = Config()
+    csv_filename = "myo_data"
 
     # Get options and arguments
     try:
-        opts, args = getopt.getopt(argv, 'hsn:a:p:v', ['help', 'shutdown', 'nmyo', 'address', 'port', 'verbose'])
+        opts, args = getopt.getopt(argv, 'hsn:a:p:v', ['help', 'shutdown', 'nmyo', 'address', 'port', 'verbose', 'csv='])
     except getopt.GetoptError:
         sys.exit(2)
     turnoff = False
@@ -31,9 +33,13 @@ def main(argv):
 
     # Run
     myo_driver = None
+    csv_logger = None
     try:
+        csv_logger = CSVLogger(filename_prefix=csv_filename)
+        csv_logger.start()
+        
         # Init
-        myo_driver = MyoDriver(config)
+        myo_driver = MyoDriver(config, csv_logger=csv_logger)  # CHANGE: Pass CSV logger
 
         # Connect
         myo_driver.run()
@@ -46,6 +52,11 @@ def main(argv):
         if Config.GET_MYO_INFO:
             # Get info
             myo_driver.get_info()
+        
+        for myo in myo_driver.myos:
+            if myo.device_name:
+                csv_logger.register_device(myo.connection_id, myo.device_name)
+
 
         print("Ready for data.")
         print()
@@ -62,6 +73,8 @@ def main(argv):
 
     finally:
         print("Disconnecting...")
+        if csv_logger:
+            csv_logger.stop()
         if myo_driver is not None:
             if Config.DEEP_SLEEP_AT_KEYBOARD_INTERRUPT:
                 myo_driver.deep_sleep_all()
@@ -71,8 +84,9 @@ def main(argv):
 
 
 def print_usage():
+    # CHANGE: Updated usage message with CSV option
     message = """usage: python mio_connect.py [-h | --help] [-s | --shutdown] [-n | --nmyo <amount>] [-a | --address \
-<address>] [-p | --port <port_number>] [-v | --verbose]
+<address>] [-p | --port <port_number>] [-v | --verbose] [-c | --csv <filename>]
 
 Options and arguments:
     -h | --help: display this message
@@ -81,9 +95,9 @@ Options and arguments:
     -a | --address <address>: set OSC address
     -p | --port <port_number>: set OSC port
     -v | --verbose: get verbose output
+    -c | --csv <filename>: set CSV filename prefix (default: myo_data)
 """
     print(message)
-
-
+    
 if __name__ == "__main__":
     main(sys.argv[1:])

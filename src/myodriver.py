@@ -10,13 +10,13 @@ class MyoDriver:
     """
     Responsible for myo connections and messages.
     """
-    def __init__(self, config):
+    def __init__(self, config, csv_logger=None):
         self.config = config
         print("OSC Address: " + str(self.config.OSC_ADDRESS))
         print("OSC Port: " + str(self.config.OSC_PORT))
         print()
 
-        self.data_handler = DataHandler(self.config)
+        self.data_handler = DataHandler(self.config, csv_logger=csv_logger)
         self.bluetooth = Bluetooth(self.config.MESSAGE_DELAY)
 
         self.myos = []
@@ -260,7 +260,7 @@ class MyoDriver:
             self._print_status("Getting myo info")
             self._print_status()
             for myo in self.myos:
-                self.bluetooth.read_device_name(myo.connection_id)
+                self.bluetooth.read_device_name(myo.connection_id)  # burası connection ID yazıyr ya bağlanma sırası mı acaba???? yoksa isim mi?
                 self.bluetooth.read_firmware_version(myo.connection_id)
                 self.bluetooth.read_battery_level(myo.connection_id)
             while not self._myos_ready():

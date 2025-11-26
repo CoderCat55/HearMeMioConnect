@@ -7,10 +7,11 @@ class DataHandler:
     """
     EMG/IMU/Classifier data handler.
     """
-    def __init__(self, config):
+    def __init__(self, config, csv_logger=None):
         self.osc = udp_client.SimpleUDPClient(config.OSC_ADDRESS, config.OSC_PORT)
         self.printEmg = config.PRINT_EMG
         self.printImu = config.PRINT_IMU
+        self.csv_logger = csv_logger
 
     def handle_emg(self, payload):
         """
@@ -23,6 +24,14 @@ class DataHandler:
         # Send both samples
         self._send_single_emg(payload['connection'], payload['value'][0:8])
         self._send_single_emg(payload['connection'], payload['value'][8:16])
+
+        if self.csv_logger:
+            # Unpack EMG data
+            emg_sample1 = struct.unpack('<8b', payload['value'][0:8])
+            emg_sample2 = struct.unpack('<8b', payload['value'][8:16])
+            # Log both samples
+            self.csv_logger.log_emg(payload['connection'], emg_sample1)
+            self.csv_logger.log_emg(payload['connection'], emg_sample2)
 
     def _send_single_emg(self, conn, data):
         builder = udp_client.OscMessageBuilder("/myo/emg")
@@ -62,6 +71,27 @@ class DataHandler:
         builder.add_arg(str(payload['connection']), 's')
         builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
         self.osc.send(builder.build())
+
+        if self.csv_logger:
+            # Unpack all IMU data
+            quat = struct.unpack('hhhh', payload['value'][0:8])
+            accel = struct.unpack('hhh', payload['value'][8:14])
+            gyro = struct.unpack('hhh', payload['value'][14:20])
+            roll, pitch, yaw = self._euler_angle(*quat)
+            
+            imu_data = {
+                'roll': roll,
+                'pitch': pitch,
+                'yaw': yaw,
+                'accel_x': accel[0],
+                'accel_y': accel[1],
+                'accel_z': accel[2],
+                'gyro_x': gyro[0],
+                'gyro_y': gyro[1],
+                'gyro_z': gyro[2]
+            }
+            self.csv_logger.log_imu(payload['connection'], imu_data)
+
 
     @staticmethod
     def _euler_angle(w, x, y, z):
