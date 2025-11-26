@@ -1,3 +1,9 @@
+
+
+#I have cloned this repository to make it easier for me to work on it. I am just cahnging code for my porject.
+#This work is not mine 
+# Here is the original https://github.com/francocruces/MioConnect
+
 # Background
 MioConnect is a MyoConnect alternative for the Myo Armband, connects to the device(s) and transmits EMG/IMU via OSC.
 
