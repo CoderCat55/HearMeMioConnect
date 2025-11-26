@@ -1,92 +1,122 @@
-from pythonosc import udp_client
+import csv
+import time
+from datetime import datetime
 import struct
-import math
-
 
 class DataHandler:
     """
-    EMG/IMU/Classifier data handler.
+    Unified 2-arm Myo data handler.
+    Writes ONE CSV row only when both arms have new EMG + IMU data.
     """
-    def __init__(self, config):
-        self.osc = udp_client.SimpleUDPClient(config.OSC_ADDRESS, config.OSC_PORT)
-        self.printEmg = config.PRINT_EMG
-        self.printImu = config.PRINT_IMU
 
+    def __init__(self, config_obj):
+        self.config = config_obj
+        self.start_time = time.time()
+
+        # Store last data for each Myo
+        self.last_emg = {0: None, 1: None}
+        self.last_imu = {0: None, 1: None}
+
+        # Map Myo BLE connections to IDs
+        self.connection_to_myo_id = {}
+
+        # Unified CSV file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"myo_2arm_unified_{timestamp}.csv"
+        self.csv_file = open(filename, 'w', newline='')
+        self.csv_writer = csv.writer(self.csv_file)
+
+        # CSV header
+        header = ['timestamp']
+        for col in [1, 2]:
+            header += [
+                f'col{col}_emg1', 'col{}_emg2'.format(col), 'col{}_emg3'.format(col), 'col{}_emg4'.format(col),
+                'col{}_emg5'.format(col), 'col{}_emg6'.format(col), 'col{}_emg7'.format(col), 'col{}_emg8'.format(col),
+                f'col{col}_quat_w', f'col{col}_quat_x', f'col{col}_quat_y', f'col{col}_quat_z',
+                f'col{col}_acc_x', f'col{col}_acc_y', f'col{col}_acc_z',
+                f'col{col}_gyro_x', f'col{col}_gyro_y', f'col{col}_gyro_z'
+            ]
+
+        self.csv_writer.writerow(header)
+        print(f"\nCreated 2-arm unified CSV: {filename}\n")
+
+    def register_connection(self, conn, myo_id):
+        self.connection_to_myo_id[conn] = myo_id
+        print(f"Registered connection {conn} as Myo {myo_id}")
+
+    def get_myo_id(self, payload):
+        conn = payload.get('connection', None)
+        if conn is None:
+            return 0
+
+        if conn not in self.connection_to_myo_id:
+            new_id = len(self.connection_to_myo_id)
+            if new_id >= self.config.MYO_AMOUNT:
+                new_id = 0
+            self.register_connection(conn, new_id)
+
+        return self.connection_to_myo_id[conn]
+
+    # ---------------- EMG ----------------
     def handle_emg(self, payload):
-        """
-        Handle EMG data.
-        :param payload: emg data as two samples in a single pack.
-        """
-        if self.printEmg:
-            print("EMG", payload['connection'], payload['atthandle'], payload['value'])
+        myo_id = self.get_myo_id(payload)
 
-        # Send both samples
-        self._send_single_emg(payload['connection'], payload['value'][0:8])
-        self._send_single_emg(payload['connection'], payload['value'][8:16])
-
-    def _send_single_emg(self, conn, data):
-        builder = udp_client.OscMessageBuilder("/myo/emg")
-        builder.add_arg(str(conn), 's')
-        for i in struct.unpack('<8b ', data):
-            builder.add_arg(i / 127, 'i')  # Normalize
-        self.osc.send(builder.build())
-
-    def handle_imu(self, payload):
-        """
-        Handle IMU data.
-        :param payload: imu data in a single byte array.
-        """
-        if self.printImu:
-            print("IMU", payload['connection'], payload['atthandle'], payload['value'])
-        # Send orientation
-        data = payload['value'][0:8]
-        builder = udp_client.OscMessageBuilder("/myo/orientation")
-        builder.add_arg(str(payload['connection']), 's')
-        roll, pitch, yaw = self._euler_angle(*(struct.unpack('hhhh', data)))
-        # Normalize to [-1, 1]
-        builder.add_arg(roll / math.pi, 'f')
-        builder.add_arg(pitch / math.pi, 'f')
-        builder.add_arg(yaw / math.pi, 'f')
-        self.osc.send(builder.build())
-
-        # Send accelerometer
-        data = payload['value'][8:14]
-        builder = udp_client.OscMessageBuilder("/myo/accel")
-        builder.add_arg(str(payload['connection']), 's')
-        builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
-        self.osc.send(builder.build())
-
-        # Send gyroscope
-        data = payload['value'][14:20]
-        builder = udp_client.OscMessageBuilder("/myo/gyro")
-        builder.add_arg(str(payload['connection']), 's')
-        builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
-        self.osc.send(builder.build())
-
-    @staticmethod
-    def _euler_angle(w, x, y, z):
-        """
-        From https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles.
-        """
-        # roll (x-axis rotation)
-        sinr_cosp = +2.0 * (w * x + y * z)
-        cosr_cosp = +1.0 - 2.0 * (x * x + y * y)
-        roll = math.atan2(sinr_cosp, cosr_cosp)
-
-        # pitch (y-axis rotation)
-        sinp = +2.0 * (w * y - z * x)
-        if math.fabs(sinp) >= 1:
-            pitch = math.copysign(math.pi / 2, sinp)  # use 90 degrees if out of range
+        if 'emg' in payload:
+            emg = payload['emg']
+        elif 'value' in payload:
+            emg = struct.unpack('<8b', payload['value'][:8])
         else:
-            pitch = math.asin(sinp)
+            return
 
-        # yaw (z-axis rotation)
-        siny_cosp = +2.0 * (w * z + x * y)
-        cosy_cosp = +1.0 - 2.0 * (y * y + z * z)
-        yaw = math.atan2(siny_cosp, cosy_cosp)
+        self.last_emg[myo_id] = list(emg)
+        self.try_write_row()
 
-        return roll, pitch, yaw
+    # ---------------- IMU ----------------
+    def handle_imu(self, payload):
+        myo_id = self.get_myo_id(payload)
 
-    @staticmethod
-    def _vector_magnitude(x, y, z):
-        return math.sqrt(x * x + y * y + z * z)
+        if 'value' in payload:
+            raw = payload['value']
+            orientation = [x / 16384.0 for x in struct.unpack('<4h', raw[0:8])]
+            accel = [x / 2048.0 for x in struct.unpack('<3h', raw[8:14])]
+            gyro = [x / 16.0 for x in struct.unpack('<3h', raw[14:20])]
+        else:
+            return
+
+        self.last_imu[myo_id] = orientation + accel + gyro
+        self.try_write_row()
+
+    # -------------- WRITE ROW WHEN READY --------------
+    def try_write_row(self):
+        """
+        Write CSV only when BOTH arms have:
+        - EMG
+        - IMU
+        """
+
+        # Check if all data exists
+        if None in (self.last_emg[0], self.last_imu[0], self.last_emg[1], self.last_imu[1]):
+            return
+
+        # Prepare row
+        timestamp = time.time() - self.start_time
+
+        row = (
+            [timestamp] +
+            self.last_emg[0] + self.last_imu[0] +
+            self.last_emg[1] + self.last_imu[1]
+        )
+
+        self.csv_writer.writerow(row)
+        self.csv_file.flush()
+
+        # Clear stored data so next row uses fresh packets
+        self.last_emg = {0: None, 1: None}
+        self.last_imu = {0: None, 1: None}
+
+    def close_files(self):
+        print("\nClosing unified CSV...")
+        try:
+            self.csv_file.close()
+        except:
+            pass
