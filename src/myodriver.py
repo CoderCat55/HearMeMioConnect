@@ -260,7 +260,7 @@ class MyoDriver:
             self._print_status("Getting myo info")
             self._print_status()
             for myo in self.myos:
-                self.bluetooth.read_device_name(myo.connection_id)  # burası connection ID yazıyr ya bağlanma sırası mı acaba???? yoksa isim mi?
+                self.bluetooth.read_device_name(myo.connection_id)  # connection idsine göre ismini alıyor sanırım bunu csv dosyasına eklemeyiliyz.
                 self.bluetooth.read_firmware_version(myo.connection_id)
                 self.bluetooth.read_battery_level(myo.connection_id)
             while not self._myos_ready():
