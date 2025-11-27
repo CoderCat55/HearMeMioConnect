@@ -119,6 +119,13 @@ class MyoDriver:
         self.bluetooth.disable_sleep(myo_to_connect.connection_id)
 
         # Enable data and subscribe
+        
+        self.bluetooth.read_device_name(myo_to_connect.connection_id)
+        self.bluetooth.read_firmware_version(myo_to_connect.connection_id)
+        self.bluetooth.read_battery_level(myo_to_connect.connection_id)
+        while not myo_to_connect.ready():
+          self.receive()  
+          
         self.bluetooth.enable_data(myo_to_connect.connection_id, self.config)
 
         print("Myo ready", myo_to_connect.connection_id, myo_to_connect.address)
