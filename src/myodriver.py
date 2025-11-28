@@ -125,6 +125,11 @@ class MyoDriver:
         self.bluetooth.read_battery_level(myo_to_connect.connection_id)
         while not myo_to_connect.ready():
           self.receive()  
+        if self.data_handler.csv_logger and myo_to_connect.device_name:
+            self.data_handler.csv_logger.register_device(
+            myo_to_connect.connection_id, 
+            myo_to_connect.device_name
+        )
           
         self.bluetooth.enable_data(myo_to_connect.connection_id, self.config)
 
