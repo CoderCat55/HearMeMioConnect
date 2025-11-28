@@ -8,14 +8,37 @@ from src.data_handler import DataHandler
 
 class MyoDriver:
     """
-    Responsible for myo connections and messages.
+    Responsible for myo connections and messages with synchronized CSV logging.
+    
+    CHANGES FROM ORIGINAL:
+    1. Added csv_logger parameter
+    2. Pass csv_logger to DataHandler
+    3. Register device names with CSV logger in get_info()
     """
+    
     def __init__(self, config, csv_logger=None):
+        """
+        Initialize Myo driver with optional CSV logging
+        
+        Args:
+            config: Configuration object
+            csv_logger: Optional CSVLogger instance (passed from mio_connect.py)
+            
+        REASONING: csv_logger is created and started in mio_connect.py before
+        MyoDriver initialization, so it's ready to receive registrations.
+        """
         self.config = config
+        self.csv_logger = csv_logger
+        
         print("OSC Address: " + str(self.config.OSC_ADDRESS))
         print("OSC Port: " + str(self.config.OSC_PORT))
+        if csv_logger:
+            print("CSV Logging: ENABLED")
         print()
 
+        # Pass csv_logger to DataHandler for sensor data updates
+        # REASONING: DataHandler.handle_emg() and handle_imu() will call
+        # csv_logger.update_emg() and update_imu() with latest values
         self.data_handler = DataHandler(self.config, csv_logger=csv_logger)
         self.bluetooth = Bluetooth(self.config.MESSAGE_DELAY)
 
@@ -119,13 +142,6 @@ class MyoDriver:
         self.bluetooth.disable_sleep(myo_to_connect.connection_id)
 
         # Enable data and subscribe
-        
-        self.bluetooth.read_device_name(myo_to_connect.connection_id)
-        self.bluetooth.read_firmware_version(myo_to_connect.connection_id)
-        self.bluetooth.read_battery_level(myo_to_connect.connection_id)
-        while not myo_to_connect.ready():
-          self.receive()  
-          
         self.bluetooth.enable_data(myo_to_connect.connection_id, self.config)
 
         print("Myo ready", myo_to_connect.connection_id, myo_to_connect.address)
@@ -210,7 +226,10 @@ class MyoDriver:
 
     def handle_attribute_value(self, e, payload):
         """
-        Handler for EMG events, expected as a ble_evt_attclient_attribute_value event with handle 43, 46, 49 or 52.
+        Handler for EMG/IMU events and device info.
+        
+        REASONING: Routes data to appropriate handlers. EMG and IMU go to data_handler
+        which updates csv_logger. Device info goes to Myo objects.
         """
         emg_handles = [
             ServiceHandles.EmgData0Characteristic,
@@ -261,17 +280,33 @@ class MyoDriver:
 
     def get_info(self):
         """
-        Send read attribute messages and await answer.
+        Get device info and register with CSV logger
+        
+        REASONING: After connection, read device_name from each Myo and register
+        with csv_logger so it can tag data with correct device names.
         """
         if len(self.myos):
             self._print_status("Getting myo info")
             self._print_status()
+            
+            # Read device info from all Myos
             for myo in self.myos:
-                self.bluetooth.read_device_name(myo.connection_id)  # connection idsine göre ismini alıyor sanırım bunu csv dosyasına eklemeyiliyz.
+                self.bluetooth.read_device_name(myo.connection_id)
                 self.bluetooth.read_firmware_version(myo.connection_id)
                 self.bluetooth.read_battery_level(myo.connection_id)
+                
+            # Wait for all device info to be received
             while not self._myos_ready():
                 self.receive()
+                
+            # Register devices with CSV logger
+            # REASONING: Now that device_name is populated, register with csv_logger
+            # so it can use device names in CSV rows
+            if self.csv_logger:
+                for myo in self.myos:
+                    self.csv_logger.register_device(myo.connection_id, myo.device_name)
+            
+            # Print device info
             print("Myo list:")
             for myo in self.myos:
                 print(" - " + str(myo))
@@ -299,7 +334,7 @@ class MyoDriver:
 
     def _myos_ready(self):
         """
-        :return: True if every myo has its data set, False otherwise.
+        :return:True if every myo has its data set, False otherwise.
         """
         for m in self.myos:
             if not m.ready():
