@@ -38,25 +38,23 @@ class DataHandler:
         
         timestamp = time.time()
         
-        # Create data packets for both samples - NORMALIZED like original
+        # Create data packets for both samples
         data_packet1 = {
             'type': 'emg',
             'timestamp': timestamp,
             'device_name': device_name,
             'connection_id': connection_id,
-            'data': sample1,  #raw filtered values
-            'sample_number': 0,
-            'raw_data': sample1  # Keep raw values for reference
+            'data': sample1,  # raw values
+            'sample_number': 0
         }
-        
+    
         data_packet2 = {
             'type': 'emg', 
-            'timestamp': timestamp + 0.005,  # ~5ms between samples at 200Hz
+            'timestamp': timestamp + 0.005,
             'device_name': device_name,
             'connection_id': connection_id,
-            'data': [x / 127.0 for x in sample2],  # Normalize to [-1, 1]
-            'sample_number': 1,
-            'raw_data': sample2
+            'data': sample2,  # raw values
+            'sample_number': 1
         }
         
         # Send to both queues
@@ -69,7 +67,7 @@ class DataHandler:
             pass  # Handle queue full situations
         
         if self.printEmg:
-            print(f"EMG {device_name}: Sample1={sample1}, Normalized={[x/127.0 for x in sample1]}")
+            print(f"EMG {device_name}: Sample1={sample1}, Sample2={sample2}")
 
     def handle_imu(self, payload):
         """
