@@ -44,7 +44,7 @@ class DataHandler:
             'timestamp': timestamp,
             'device_name': device_name,
             'connection_id': connection_id,
-            'data': [x / 127.0 for x in sample1],  # Normalize to [-1, 1] like original
+            'data': sample1,  #raw filtered values
             'sample_number': 0,
             'raw_data': sample1  # Keep raw values for reference
         }
