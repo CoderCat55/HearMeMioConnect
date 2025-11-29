@@ -1,3 +1,9 @@
+"""
+Check if there any mismatching between datas like emg,imu bcs esmg sensds 2 samples?
+
+"""
+
+
 
 
 #I have cloned this repository to make it easier for me to work on it. I am just cahnging code for my porject.
