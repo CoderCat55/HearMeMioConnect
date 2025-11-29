@@ -19,6 +19,15 @@ class DataHandler:
         # Reference to MyoDriver to access Myo objects and device names
         self.myo_driver = myo_driver
 
+        # Reference to MyoDriver to access Myo objects and device names
+        self.myo_driver = myo_driver
+        
+        # ADD THIS: Buffer to hold latest EMG samples
+        self.latest_emg_samples = {}  # {device_name: [(sample1, timestamp), (sample2, timestamp)]}
+        
+        # ADD THIS: Device name to armband ID mapping
+        self.device_name_to_id = {}
+
     def handle_emg(self, payload):
         """
         Handle EMG data and send to multiprocessing queues.
@@ -43,6 +52,10 @@ class DataHandler:
             (sample2, timestamp + 0.005)  # 5ms later (200Hz)
         ]
 
+        if self.printEmg:
+            print(f"EMG {device_name}: Sample1={sample1[:3]}..., Sample2={sample2[:3]}...")
+
+
     def handle_imu(self, payload):
         """
         Handle IMU data and send to multiprocessing queues.
@@ -58,16 +71,16 @@ class DataHandler:
         
         timestamp = time.time()
         
-        # Parse orientation (quaternion) - SAME AS ORIGINAL
+
         orientation_data = raw_data[0:8]
         w, x, y, z = struct.unpack('hhhh', orientation_data)  # 4 signed shorts
         roll, pitch, yaw = self._euler_angle(w, x, y, z)
         
-        # Parse accelerometer - SAME AS ORIGINAL
+        
         accel_data = raw_data[8:14]
         accel_x, accel_y, accel_z = struct.unpack('hhh', accel_data)  # 3 signed shorts
         
-        # Parse gyroscope - SAME AS ORIGINAL  
+        
         gyro_data = raw_data[14:20]
         gyro_x, gyro_y, gyro_z = struct.unpack('hhh', gyro_data)  # 3 signed shorts
         # Check if we have EMG samples for this device
@@ -108,6 +121,17 @@ class DataHandler:
             if myo.connection_id == connection_id and myo.device_name is not None:
                 return myo.device_name
         return None
+    
+    def _get_armband_id(self, device_name):
+        """
+        Map device name to armband ID (0 or 1).
+        First device connected = 0, second = 1
+        """
+        if device_name not in self.device_name_to_id:
+            self.device_name_to_id[device_name] = len(self.device_name_to_id)
+            print(f"📱 Armband '{device_name}' assigned ID: {self.device_name_to_id[device_name]}")
+        
+        return self.device_name_to_id[device_name]
 
     @staticmethod
     def _euler_angle(w, x, y, z):

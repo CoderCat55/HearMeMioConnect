@@ -22,6 +22,7 @@ def myo_handler_process(emg_queue_logger, emg_queue_classifier, shutdown_event):
     
     from src.myodriver import MyoDriver
     from src.config import Config
+    from src.public.myohw import EmgMode, ImuMode
     
     try:
         # Create config
@@ -251,5 +252,5 @@ def myo_handler_mock(emg_queue_logger, emg_queue_classifier, shutdown_event):
 
 
 # For testing, export the mock version
-myo_handler_process = myo_handler_mock  # Use mock by default
+#myo_handler_process = myo_handler_mock  # Use mock by default
 # After integrating MioConnect, change back to real version
