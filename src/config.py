@@ -13,8 +13,8 @@ class Config:
 
     DEEP_SLEEP_AT_KEYBOARD_INTERRUPT = False  # Turn off connected devices after keyboard interrupt
 
-    PRINT_EMG = False  # Console print EMG data
-    PRINT_IMU = False  # Console print IMU data
+    PRINT_EMG = True  # Console print EMG data
+    PRINT_IMU = True  # Console print IMU data
 
     VERBOSE = False  # Verbose console
     GET_MYO_INFO = True  # Get and display myo info at sync
