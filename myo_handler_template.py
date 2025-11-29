@@ -14,55 +14,46 @@ import queue
 from src.myodriver import MyoDriver
 from src.config import Config
 
-
 def myo_handler_process(emg_queue_logger, emg_queue_classifier, shutdown_event):
     """
-    Main function for Myo Handler process
-    
-    Args:
-        emg_queue_logger: Queue for numpy logger
-        emg_queue_classifier: Queue for classifier
-        shutdown_event: Event to signal shutdown
+    Real Myo Handler using MioConnect
     """
     print("🟢 Myo Handler: Started")
     
-    # Initialize data handler
-    handler = MyoDataHandler(emg_queue_logger, emg_queue_classifier)
+    from src.myodriver import MyoDriver
+    from src.config import Config
     
-    # TODO: Initialize MioConnect
-    # This is pseudocode - adjust based on actual MioConnect API
-    """
-    config = Config()
-    config.MYO_AMOUNT = 2  # Connect to 2 armbands
-    config.EMG_MODE = 'raw'  # Get raw EMG data
-    config.IMU_MODE = 'data'  # Get IMU data
-    
-    driver = MyoDriver(config)
-    driver.set_data_handler(handler)  # Pass our custom handler
-    
-    # Start connection
-    driver.connect()
-    """
-    
-    print("🔵 Myo Handler: Connecting to armbands...")
-    print("   Waiting for 2 Myo armbands...")
-    
-    # TODO: Actual connection logic from MioConnect
-    # This would be handled by MioConnect's main loop
-    
-    # Keep running until shutdown
-    while not shutdown_event.is_set():
-        time.sleep(0.1)
+    try:
+        # Create config
+        config = Config()
+        config.MYO_AMOUNT = 2
+        config.EMG_MODE = EmgMode.myohw_emg_mode_send_emg_raw
+        config.IMU_MODE = ImuMode.myohw_imu_mode_send_data
+        config.PRINT_EMG = False
+        config.PRINT_IMU = False
         
-        # TODO: MioConnect's main loop would go here
-        # driver.update() or similar
-    
-    # TODO: Disconnect armbands
-    # driver.disconnect()
-    
-    print("🔴 Myo Handler: Stopped")
-
-
+        # Create driver with queues
+        driver = MyoDriver(config, emg_queue_logger, emg_queue_classifier)
+        
+        # Run connection
+        driver.run()
+        
+        print("🔵 Myo Handler: Connected, receiving data...")
+        
+        # Keep receiving until shutdown
+        while not shutdown_event.is_set():
+            driver.receive()
+            time.sleep(0.001)  # Small sleep to prevent 100% CPU
+        
+    except KeyboardInterrupt:
+        print("🔴 Myo Handler: Interrupted")
+    except Exception as e:
+        print(f"🔴 Myo Handler: Error - {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        print("🔴 Myo Handler: Stopped")
+        
 class MyoDataHandler:
     """
     Custom data handler to be integrated into MioConnect

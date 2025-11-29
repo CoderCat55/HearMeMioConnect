@@ -37,37 +37,11 @@ class DataHandler:
         sample2 = struct.unpack('<8b', raw_data[8:16])  # Second sample: 8 signed bytes
         
         timestamp = time.time()
-        
-        # Create data packets for both samples
-        data_packet1 = {
-            'type': 'emg',
-            'timestamp': timestamp,
-            'device_name': device_name,
-            'connection_id': connection_id,
-            'data': sample1,  # raw values
-            'sample_number': 0
-        }
-    
-        data_packet2 = {
-            'type': 'emg', 
-            'timestamp': timestamp + 0.005,
-            'device_name': device_name,
-            'connection_id': connection_id,
-            'data': sample2,  # raw values
-            'sample_number': 1
-        }
-        
-        # Send to both queues
-        try:
-            self.emg_queue_logger.put(data_packet1)
-            self.emg_queue_classifier.put(data_packet1)
-            self.emg_queue_logger.put(data_packet2)
-            self.emg_queue_classifier.put(data_packet2)
-        except:
-            pass  # Handle queue full situations
-        
-        if self.printEmg:
-            print(f"EMG {device_name}: Sample1={sample1}, Sample2={sample2}")
+        # Store both samples with timestamps
+        self.latest_emg_samples[device_name] = [
+            (sample1, timestamp),
+            (sample2, timestamp + 0.005)  # 5ms later (200Hz)
+        ]
 
     def handle_imu(self, payload):
         """
@@ -96,44 +70,35 @@ class DataHandler:
         # Parse gyroscope - SAME AS ORIGINAL  
         gyro_data = raw_data[14:20]
         gyro_x, gyro_y, gyro_z = struct.unpack('hhh', gyro_data)  # 3 signed shorts
+        # Check if we have EMG samples for this device
+        if device_name not in self.latest_emg_samples:
+            return  # No EMG yet, skip
         
-        # Create IMU data packet - NORMALIZED like original
-        imu_packet = {
-            'type': 'imu',
-            'timestamp': timestamp,
-            'device_name': device_name,
-            'connection_id': connection_id,
-            'orientation': {
-                'roll': roll / math.pi,        # Normalized to [-1, 1] like original
-                'pitch': pitch / math.pi,      # Normalized to [-1, 1]  
-                'yaw': yaw / math.pi,          # Normalized to [-1, 1]
-                'quaternion': [w, x, y, z]     # Raw quaternion values
-            },
-            'accelerometer': {
-                'x': accel_x,
-                'y': accel_y, 
-                'z': accel_z,
-                'magnitude': self._vector_magnitude(accel_x, accel_y, accel_z)
-            },
-            'gyroscope': {
-                'x': gyro_x,
-                'y': gyro_y,
-                'z': gyro_z,
-                'magnitude': self._vector_magnitude(gyro_x, gyro_y, gyro_z)
+        # Get the 2 most recent EMG samples
+        emg_samples = self.latest_emg_samples[device_name]
+        
+        # Send COMBINED packets for BOTH EMG samples
+        for emg_sample, emg_timestamp in emg_samples:
+            combined_packet = {
+                'timestamp': emg_timestamp,
+                'armband_id': self._get_armband_id(device_name),
+                'emg': emg_sample,  # 8 values
+                'imu': {
+                    'accel': [accel_x, accel_y, accel_z],
+                    'gyro': [gyro_x, gyro_y, gyro_z],
+                    'orientation': [w, x, y, z]
+                }
             }
-        }
-        
-        # Send to both queues
-        try:
-            self.emg_queue_logger.put(imu_packet)
-            self.emg_queue_classifier.put(imu_packet)
-        except:
-            pass
+            
+            try:
+                self.emg_queue_logger.put(combined_packet, block=False)
+                self.emg_queue_classifier.put(combined_packet, block=False)
+            except:
+                pass
         
         if self.printImu:
-            print(f"IMU {device_name}: "
-                  f"Roll={roll/math.pi:.3f}, Pitch={pitch/math.pi:.3f}, Yaw={yaw/math.pi:.3f}")
-
+            print(f"IMU {device_name}: Roll={roll/math.pi:.3f}, Pitch={pitch/math.pi:.3f}, Yaw={yaw/math.pi:.3f}")
+    
     def _get_device_name(self, connection_id):
         """
         Get device name from MyoDriver using connection ID.
