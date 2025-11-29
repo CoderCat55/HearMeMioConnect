@@ -7,24 +7,18 @@ from src.data_handler import DataHandler
 
 
 class MyoDriver:
-    """
-    Responsible for myo connections and messages.
-    """
-    def __init__(self, config):
+    def __init__(self, config, emg_queue_logger=None, emg_queue_classifier=None):
         self.config = config
-        print("OSC Address: " + str(self.config.OSC_ADDRESS))
-        print("OSC Port: " + str(self.config.OSC_PORT))
-        print()
-
-        self.data_handler = DataHandler(self.config)
+        print("MyoDriver starting...")
+        
+        # Initialize data handler with queues and self reference
+        self.data_handler = DataHandler(self.config, emg_queue_logger, emg_queue_classifier, self)
         self.bluetooth = Bluetooth(self.config.MESSAGE_DELAY)
-
+        
         self.myos = []
-
         self.myo_to_connect = None
         self.scanning = False
-
-        # Add handlers for expected events
+        
         self.set_handlers()
 
     def run(self):

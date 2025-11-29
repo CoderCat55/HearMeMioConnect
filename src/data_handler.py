@@ -1,72 +1,156 @@
-from pythonosc import udp_client
 import struct
 import math
-
+import time
+from multiprocessing import Queue
 
 class DataHandler:
     """
-    EMG/IMU/Classifier data handler.
+    EMG/IMU data handler for multiprocessing framework.
+    Modified to send data to queues instead of OSC.
     """
-    def __init__(self, config):
-        self.osc = udp_client.SimpleUDPClient(config.OSC_ADDRESS, config.OSC_PORT)
+    def __init__(self, config, emg_queue_logger, emg_queue_classifier, myo_driver):
         self.printEmg = config.PRINT_EMG
         self.printImu = config.PRINT_IMU
+        
+        # Multiprocessing queues for data sharing
+        self.emg_queue_logger = emg_queue_logger
+        self.emg_queue_classifier = emg_queue_classifier
+        
+        # Reference to MyoDriver to access Myo objects and device names
+        self.myo_driver = myo_driver
 
     def handle_emg(self, payload):
         """
-        Handle EMG data.
-        :param payload: emg data as two samples in a single pack.
+        Handle EMG data and send to multiprocessing queues.
+        Based on original _send_single_emg method.
         """
+        connection_id = payload['connection']
+        raw_data = payload['value']
+        
+        # Get device name from MyoDriver
+        device_name = self._get_device_name(connection_id)
+        if device_name is None:
+            return  # Myo info not available yet
+        
+        # Parse EMG data (2 samples of 8 channels each) - SAME AS ORIGINAL
+        sample1 = struct.unpack('<8b', raw_data[0:8])   # First sample: 8 signed bytes
+        sample2 = struct.unpack('<8b', raw_data[8:16])  # Second sample: 8 signed bytes
+        
+        timestamp = time.time()
+        
+        # Create data packets for both samples - NORMALIZED like original
+        data_packet1 = {
+            'type': 'emg',
+            'timestamp': timestamp,
+            'device_name': device_name,
+            'connection_id': connection_id,
+            'data': [x / 127.0 for x in sample1],  # Normalize to [-1, 1] like original
+            'sample_number': 0,
+            'raw_data': sample1  # Keep raw values for reference
+        }
+        
+        data_packet2 = {
+            'type': 'emg', 
+            'timestamp': timestamp + 0.005,  # ~5ms between samples at 200Hz
+            'device_name': device_name,
+            'connection_id': connection_id,
+            'data': [x / 127.0 for x in sample2],  # Normalize to [-1, 1]
+            'sample_number': 1,
+            'raw_data': sample2
+        }
+        
+        # Send to both queues
+        try:
+            self.emg_queue_logger.put(data_packet1)
+            self.emg_queue_classifier.put(data_packet1)
+            self.emg_queue_logger.put(data_packet2)
+            self.emg_queue_classifier.put(data_packet2)
+        except:
+            pass  # Handle queue full situations
+        
         if self.printEmg:
-            print("EMG", payload['connection'], payload['atthandle'], payload['value'])
-
-        # Send both samples
-        self._send_single_emg(payload['connection'], payload['value'][0:8])
-        self._send_single_emg(payload['connection'], payload['value'][8:16])
-
-    def _send_single_emg(self, conn, data):
-        builder = udp_client.OscMessageBuilder("/myo/emg")
-        builder.add_arg(str(conn), 's')
-        for i in struct.unpack('<8b ', data):
-            builder.add_arg(i / 127, 'f')  # Normalize  #changed this to f because it was giving an eror
-        self.osc.send(builder.build())
+            print(f"EMG {device_name}: Sample1={sample1}, Normalized={[x/127.0 for x in sample1]}")
 
     def handle_imu(self, payload):
         """
-        Handle IMU data.
-        :param payload: imu data in a single byte array.
+        Handle IMU data and send to multiprocessing queues.
+        Based on original handle_imu method.
         """
+        connection_id = payload['connection']
+        raw_data = payload['value']
+        
+        # Get device name from MyoDriver
+        device_name = self._get_device_name(connection_id)
+        if device_name is None:
+            return  # Myo info not available yet
+        
+        timestamp = time.time()
+        
+        # Parse orientation (quaternion) - SAME AS ORIGINAL
+        orientation_data = raw_data[0:8]
+        w, x, y, z = struct.unpack('hhhh', orientation_data)  # 4 signed shorts
+        roll, pitch, yaw = self._euler_angle(w, x, y, z)
+        
+        # Parse accelerometer - SAME AS ORIGINAL
+        accel_data = raw_data[8:14]
+        accel_x, accel_y, accel_z = struct.unpack('hhh', accel_data)  # 3 signed shorts
+        
+        # Parse gyroscope - SAME AS ORIGINAL  
+        gyro_data = raw_data[14:20]
+        gyro_x, gyro_y, gyro_z = struct.unpack('hhh', gyro_data)  # 3 signed shorts
+        
+        # Create IMU data packet - NORMALIZED like original
+        imu_packet = {
+            'type': 'imu',
+            'timestamp': timestamp,
+            'device_name': device_name,
+            'connection_id': connection_id,
+            'orientation': {
+                'roll': roll / math.pi,        # Normalized to [-1, 1] like original
+                'pitch': pitch / math.pi,      # Normalized to [-1, 1]  
+                'yaw': yaw / math.pi,          # Normalized to [-1, 1]
+                'quaternion': [w, x, y, z]     # Raw quaternion values
+            },
+            'accelerometer': {
+                'x': accel_x,
+                'y': accel_y, 
+                'z': accel_z,
+                'magnitude': self._vector_magnitude(accel_x, accel_y, accel_z)
+            },
+            'gyroscope': {
+                'x': gyro_x,
+                'y': gyro_y,
+                'z': gyro_z,
+                'magnitude': self._vector_magnitude(gyro_x, gyro_y, gyro_z)
+            }
+        }
+        
+        # Send to both queues
+        try:
+            self.emg_queue_logger.put(imu_packet)
+            self.emg_queue_classifier.put(imu_packet)
+        except:
+            pass
+        
         if self.printImu:
-            print("IMU", payload['connection'], payload['atthandle'], payload['value'])
-        # Send orientation
-        data = payload['value'][0:8]
-        builder = udp_client.OscMessageBuilder("/myo/orientation")
-        builder.add_arg(str(payload['connection']), 's')
-        roll, pitch, yaw = self._euler_angle(*(struct.unpack('hhhh', data)))
-        # Normalize to [-1, 1]
-        builder.add_arg(roll / math.pi, 'f')
-        builder.add_arg(pitch / math.pi, 'f')
-        builder.add_arg(yaw / math.pi, 'f')
-        self.osc.send(builder.build())
+            print(f"IMU {device_name}: "
+                  f"Roll={roll/math.pi:.3f}, Pitch={pitch/math.pi:.3f}, Yaw={yaw/math.pi:.3f}")
 
-        # Send accelerometer
-        data = payload['value'][8:14]
-        builder = udp_client.OscMessageBuilder("/myo/accel")
-        builder.add_arg(str(payload['connection']), 's')
-        builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
-        self.osc.send(builder.build())
-
-        # Send gyroscope
-        data = payload['value'][14:20]
-        builder = udp_client.OscMessageBuilder("/myo/gyro")
-        builder.add_arg(str(payload['connection']), 's')
-        builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
-        self.osc.send(builder.build())
+    def _get_device_name(self, connection_id):
+        """
+        Get device name from MyoDriver using connection ID.
+        Returns None if Myo info not available yet.
+        """
+        for myo in self.myo_driver.myos:
+            if myo.connection_id == connection_id and myo.device_name is not None:
+                return myo.device_name
+        return None
 
     @staticmethod
     def _euler_angle(w, x, y, z):
         """
-        From https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles.
+        Convert quaternion to Euler angles.
+        EXACTLY THE SAME AS ORIGINAL - from Wikipedia.
         """
         # roll (x-axis rotation)
         sinr_cosp = +2.0 * (w * x + y * z)
@@ -76,7 +160,7 @@ class DataHandler:
         # pitch (y-axis rotation)
         sinp = +2.0 * (w * y - z * x)
         if math.fabs(sinp) >= 1:
-            pitch = math.copysign(math.pi / 2, sinp)  # use 90 degrees if out of range
+            pitch = math.copysign(math.pi / 2, sinp)
         else:
             pitch = math.asin(sinp)
 
