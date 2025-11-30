@@ -33,9 +33,9 @@ class DataHandler:
             return  # Myo info not available yet
         
         # Parse EMG data (2 samples of 8 channels each) - SAME AS ORIGINAL
-        sample1 = struct.unpack('<8b', raw_data[0:8])   # First sample: 8 signed bytes
-        sample2 = struct.unpack('<8b', raw_data[8:16])  # Second sample: 8 signed bytes
-        
+        sample1 = [struct.unpack('<8b', raw_data[0:8]) / 127.0 for val in sample1_raw]  # First sample: 8 signed bytes
+        sample2 = [struct.unpack('<8b', raw_data[8:16])  / 127.0 for val in sample2_raw]# Second sample: 8 signed bytes
+        # Normalize to [-1, 1] range like the original
         # First sample timestamp
         timestamp1 = time.time()
 
