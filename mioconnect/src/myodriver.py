@@ -10,12 +10,9 @@ class MyoDriver:
     """
     Responsible for myo connections and messages.
     """
-    def __init__(self, config):
+    def __init__(self, config, shared_buffer=None, buffer_index=None):
         self.config = config
-        print("OSC Address: " + str(self.config.OSC_ADDRESS))
-        print("OSC Port: " + str(self.config.OSC_PORT))
-        print()
-
+        self.data_handler = DataHandler(self.config, shared_buffer, buffer_index)
         self.data_handler = DataHandler(self.config)
         self.bluetooth = Bluetooth(self.config.MESSAGE_DELAY)
 
@@ -126,7 +123,7 @@ class MyoDriver:
         print("Myo ready", myo_to_connect.connection_id, myo_to_connect.address)
         print()
         return True
-    def _get_device_name(self, connection_id):
+    def get_device_name(self, connection_id):
         #Get device name from connection ID
         for myo in self.myo_driver.myos:
             if myo.connection_id == connection_id:
@@ -229,11 +226,11 @@ class MyoDriver:
 
         # Delegate EMG
         if payload['atthandle'] in emg_handles:
-            self.data_handler.handle_emg(payload)
+            self.data_handler.handle_emg(payload,self)
 
         # Delegate IMU
         elif payload['atthandle'] in imu_handles:
-            self.data_handler.handle_imu(payload)
+            self.data_handler.handle_imu(payload,self)
 
         # TODO: Delegate classifier
 

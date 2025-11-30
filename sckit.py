@@ -8,6 +8,8 @@ reads realtime data from shared memory for a fixed time and classifies returns r
 #   └── metadata.json  # Gesture names, timestamps, etc.
 
 from sklearn import svm
+import glob
+import numpy as np
 
 # In sckit.py:
 class GestureClassifier:
@@ -27,11 +29,10 @@ class GestureClassifier:
 
     def load_calibration_data(self):
     #Load previously saved calibration from disk
-    import glob
-    for file in glob.glob('calibration_data/*.npy'):
-        gesture_name = file.split('/')[-1].split('.')[0]
-        data = np.load(file)
-        self.calibration_data[gesture_name] = data
+        for file in glob.glob('calibration_data/*.npy'):
+            gesture_name = file.split('/')[-1].split('.')[0]
+            data = np.load(file)
+            self.calibration_data[gesture_name] = data
 
 """
 So add_calibration_sample() is for:

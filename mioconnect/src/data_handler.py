@@ -56,16 +56,9 @@ class DataHandler:
             print("EMG", payload['connection'], payload['atthandle'], payload['value'])
 
         # Send both samples
-        self._send_single_emg(payload['connection'], payload['value'][0:8])
+        self._send_single_emg(payload['connection'], payload['value'][0:8]) #use only this
         self._send_single_emg(payload['connection'], payload['value'][8:16])
-"""
-    def _send_single_emg(self, conn, data):
-        builder = udp_client.OscMessageBuilder("/myo/emg")
-        builder.add_arg(str(conn), 's')
-        for i in struct.unpack('<8b ', data):
-            builder.add_arg(i / 127, 'f')  # Normalize  #changed this to f because it was giving an eror
-"""
-
+        
     def handle_imu(self, payload,myo_driver):
         """
         Handle IMU data.
