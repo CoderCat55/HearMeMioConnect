@@ -24,3 +24,17 @@ class GestureClassifier:
         # Extract features from time series
         # Train SVM
         pass
+
+    def load_calibration_data(self):
+    #Load previously saved calibration from disk
+    import glob
+    for file in glob.glob('calibration_data/*.npy'):
+        gesture_name = file.split('/')[-1].split('.')[0]
+        data = np.load(file)
+        self.calibration_data[gesture_name] = data
+
+"""
+So add_calibration_sample() is for:
+During runtime: Adding newly recorded calibration
+Not for: Loading from disk (that's a separate load_calibration_data() method)
+"""

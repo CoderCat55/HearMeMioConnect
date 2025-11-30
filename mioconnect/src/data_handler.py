@@ -35,6 +35,15 @@ class DataHandler:
         self.printImu = config.PRINT_IMU
         self.shared_buffer = shared_buffer  # numpy array in shared memory
         self.buffer_index = buffer_index  # shared integer
+        self.local_buffer = []  # Accumulate here
+        self.BATCH_SIZE = 20  # Write every 20 samples
+
+    def _flush_to_shared_memory(self):
+        """Write accumulated samples to shared memory"""
+        if len(self.local_buffer) > 0:
+            # Write batch to shared memory
+            # Update buffer_index
+            self.local_buffer.clear()
 
     def handle_emg(self, payload,myo_driver):
         """
@@ -49,13 +58,13 @@ class DataHandler:
         # Send both samples
         self._send_single_emg(payload['connection'], payload['value'][0:8])
         self._send_single_emg(payload['connection'], payload['value'][8:16])
-
+"""
     def _send_single_emg(self, conn, data):
         builder = udp_client.OscMessageBuilder("/myo/emg")
         builder.add_arg(str(conn), 's')
         for i in struct.unpack('<8b ', data):
             builder.add_arg(i / 127, 'f')  # Normalize  #changed this to f because it was giving an eror
-
+"""
 
     def handle_imu(self, payload,myo_driver):
         """
@@ -71,27 +80,27 @@ class DataHandler:
             print("IMU", payload['connection'], payload['atthandle'], payload['value'])
         # Send orientation
         data = payload['value'][0:8]
-        builder = udp_client.OscMessageBuilder("/myo/orientation")
-        builder.add_arg(str(payload['connection']), 's')
+        #builder = udp_client.OscMessageBuilder("/myo/orientation")
+        #builder.add_arg(str(payload['connection']), 's')
         roll, pitch, yaw = self._euler_angle(*(struct.unpack('hhhh', data)))
         # Normalize to [-1, 1]
-        builder.add_arg(roll / math.pi, 'f')
-        builder.add_arg(pitch / math.pi, 'f')
-        builder.add_arg(yaw / math.pi, 'f')
+        #builder.add_arg(roll / math.pi, 'f')
+        #builder.add_arg(pitch / math.pi, 'f')
+        #builder.add_arg(yaw / math.pi, 'f')
      
 
         # Send accelerometer
         data = payload['value'][8:14]
-        builder = udp_client.OscMessageBuilder("/myo/accel")
-        builder.add_arg(str(payload['connection']), 's')
-        builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
+        #builder = udp_client.OscMessageBuilder("/myo/accel")
+        #builder.add_arg(str(payload['connection']), 's')
+        #builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
      
 
         # Send gyroscope
         data = payload['value'][14:20]
-        builder = udp_client.OscMessageBuilder("/myo/gyro")
-        builder.add_arg(str(payload['connection']), 's')
-        builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
+        #builder = udp_client.OscMessageBuilder("/myo/gyro")
+        #builder.add_arg(str(payload['connection']), 's')
+        #builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
       
 
     @staticmethod
@@ -118,6 +127,6 @@ class DataHandler:
 
         return roll, pitch, yaw
 
-    @staticmethod
+    @staticmethod #do we need this ??
     def _vector_magnitude(x, y, z):
         return math.sqrt(x * x + y * y + z * z)

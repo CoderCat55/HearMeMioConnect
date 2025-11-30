@@ -9,7 +9,12 @@ def Classify():
 def Calibrate(gestureName):
     print("meow")
     #saves calibration samples for 3 seconds
-    #should we handle this here or anywhere else?
+    # 1. Set flag in shared memory to record for 3 seconds
+    # 2. After 3 seconds, data is in shared memory as numpy array
+    # 3. Pass to classifier
+    classifier.add_calibration_sample(gesture_name, recorded_data)
+    # 4. Save to disk
+    np.save(f'calibration_data/{gesture_name}.npy', recorded_data)
 
 
 def Train():
