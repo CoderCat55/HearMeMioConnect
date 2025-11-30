@@ -3,6 +3,7 @@ from src.config import Config
 import serial
 import getopt
 import sys
+from shared_memory_manager import SharedMemoryManager
 
 
 def main(argv):
@@ -87,3 +88,9 @@ Options and arguments:
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+    config = get_config(args)
+    # Create shared memory manager
+    shm_manager = SharedMemoryManager(buffer_seconds=3)
+    
+    # Pass to driver
+    driver = MyoDriver(config, shm_manager)

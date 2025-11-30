@@ -3,7 +3,7 @@ import time
 from src.public.myohw import *
 from src.myo import Myo
 from src.bluetooth import Bluetooth
-from src.data_handler import DataHandler
+from shared_memory_handler import SharedMemoryHandler
 
 
 class MyoDriver:
@@ -16,7 +16,7 @@ class MyoDriver:
         print("OSC Port: " + str(self.config.OSC_PORT))
         print()
 
-        self.data_handler = DataHandler(self.config)
+        self.data_handler = SharedMemoryHandler(self, shared_memory_manager)
         self.bluetooth = Bluetooth(self.config.MESSAGE_DELAY)
 
         self.myos = []
