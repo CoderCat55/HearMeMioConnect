@@ -15,11 +15,13 @@ because otherwise it wants additional dongle ? why
 I need my raspberyy pi to open a http server which we can conenct even though we are in a place which doesnt have any wifi networks
 https://raspberrypi.stackexchange.com/questions/117526/how-to-create-a-wireless-and-own-rpi-wifi-network
 
-
 """
 
 """
 might add getdata endpoint for showing data inside the app (not now)
+"""
+"""
+
 """
 #init 
 config = Config()
@@ -43,11 +45,11 @@ def webserver():
     
 def Classify():
     print("meow")
-    
+
 def Stopclassify():
      print("meow")
 
-def Calibrate():
+def Calibrate(gestureidORname):
     print("meow")
 
 def Connect():
@@ -65,5 +67,6 @@ def Command():
     print("meow")
 
 def Getdata():
+    #this triggers to get data 
     print("meow")
  
