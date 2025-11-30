@@ -10,11 +10,26 @@ class MyoDriver:
     """
     Responsible for myo connections and messages.
     """
-    def __init__(self, config, shared_buffer=None, buffer_index=None):
+    def __init__(self, config, stream_buffer=None, stream_index=None, 
+             calib_buffer=None, calib_index=None, recording_flag=None,
+             recording_gesture=None):
         self.config = config
         self.data_handler = DataHandler(self.config, shared_buffer, buffer_index)
         self.bluetooth = Bluetooth(self.config.MESSAGE_DELAY)
 
+        # Initialize data_handler AFTER bluetooth, BEFORE connecting
+        # We'll pass self after Myos are connected
+        self.data_handler = DataHandler(
+            config,
+            stream_buffer=stream_buffer,
+            stream_index=stream_index,
+            calib_buffer=calib_buffer,
+            calib_index=calib_index,
+            recording_flag=recording_flag,
+            recording_gesture=recording_gesture,
+            myo_driver=self  # Pass self for device name lookup
+        )
+    
         self.myos = []
 
         self.myo_to_connect = None

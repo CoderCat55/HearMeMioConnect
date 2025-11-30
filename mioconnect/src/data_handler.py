@@ -6,9 +6,14 @@ import numpy as np
 class DataHandler:
     def __init__(self, config, stream_buffer=None, stream_index=None, 
                  calib_buffer=None, calib_index=None, recording_flag=None,
-                 recording_gesture=None):
+                 recording_gesture=None,myo_driver=None):
         self.printEmg = config.PRINT_EMG
         self.printImu = config.PRINT_IMU
+
+        # Store reference to myo_driver to get device names
+        self.myo_driver = myo_driver
+        self.myo1_name = None
+        self.myo2_name = None
         
         # Streaming buffer (circular)
         self.stream_buffer = stream_buffer
@@ -27,7 +32,6 @@ class DataHandler:
         # Batch accumulation (write to shared memory in batches)
         self.local_buffer = []
         self.BATCH_SIZE = 20
-        
     def handle_emg(self, payload, myo_driver):
         """Handle EMG data - Store RAW values (no normalization)"""
         connection_id = payload['connection']
@@ -46,21 +50,37 @@ class DataHandler:
         timestamp = time.time()
         
         # Process both samples
-        for sample in [sample1, sample2]:
-            self._process_single_emg_sample(sample, device_name, timestamp)
+       # for sample in [sample1, sample2]:
+           # self._process_single_emg_sample(sample, device_name, timestamp)
+        self._process_single_emg_sample(sample1, device_name, timestamp)
+   
+    def _identify_myos(self):
+        """Identify which Myo is which based on connection order"""
+        if self.myo_driver and len(self.myo_driver.myos) >= 2:
+            self.myo1_name = self.myo_driver.myos[0].device_name
+            self.myo2_name = self.myo_driver.myos[1].device_name
     
     def _process_single_emg_sample(self, emg_data, device_name, timestamp):
         """Process a single EMG sample (8 channels)"""
-        # Store in latest values (for real-time classification)
-        if device_name == "Myo-0" or device_name.endswith("..."):  # Adjust based on actual names
-            self.myo1_latest[0:8] = emg_data
-        else:
-            self.myo2_latest[0:8] = emg_data
+        # Lazy initialization of myo names
+        if self.myo1_name is None:
+            self._identify_myos()
         
-        # For now, accumulate in local buffer
-        # TODO: Combine with IMU data before writing to shared memory
-        # (Currently we're storing EMG and IMU separately, which causes sync issues)
+        # Store in latest values based on actual device name
+        if device_name == self.myo1_name:
+            self.myo1_latest[0:8] = emg_data
+        elif device_name == self.myo2_name:
+            self.myo2_latest[0:8] = emg_data
+        else:
+            # Device name not yet identified
+            return
+        
+    # OPTION 1: Write immediately (more data, less sync)
+    # self._write_combined_sample(timestamp)
     
+    # OPTION 2: Only write when IMU arrives (current approach - better sync)
+    # Do nothing here, wait for IMU
+
     def handle_imu(self, payload, myo_driver):
         """Handle IMU data"""
         connection_id = payload['connection']
