@@ -41,6 +41,8 @@ class MyoDriver:
 
     def receive(self):
         self.bluetooth.receive()
+    
+
 
 
 ##############################################################################
@@ -124,7 +126,12 @@ class MyoDriver:
         print("Myo ready", myo_to_connect.connection_id, myo_to_connect.address)
         print()
         return True
-
+    def _get_device_name(self, connection_id):
+        #Get device name from connection ID
+        for myo in self.myo_driver.myos:
+            if myo.connection_id == connection_id:
+                return myo.device_name
+        return None
 
 ##############################################################################
 #                                  HANDLERS                                  #

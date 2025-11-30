@@ -27,16 +27,22 @@ class DataHandler:
     """
     EMG/IMU/Classifier data handler.
     """
-    def __init__(self, config):
-        self.osc = udp_client.SimpleUDPClient(config.OSC_ADDRESS, config.OSC_PORT)
+    """def __init__(self, config):
+        self.printEmg = config.PRINT_EMG
+        self.printImu = config.PRINT_IMU"""
+    def __init__(self, config, shared_buffer, buffer_index):
         self.printEmg = config.PRINT_EMG
         self.printImu = config.PRINT_IMU
+        self.shared_buffer = shared_buffer  # numpy array in shared memory
+        self.buffer_index = buffer_index  # shared integer
 
-    def handle_emg(self, payload):
+    def handle_emg(self, payload,myo_driver):
         """
         Handle EMG data.
         :param payload: emg data as two samples in a single pack.
         """
+        connection_id = payload['connection']
+        device_name = myo_driver.get_device_name(connection_id)
         if self.printEmg:
             print("EMG", payload['connection'], payload['atthandle'], payload['value'])
 
@@ -49,13 +55,18 @@ class DataHandler:
         builder.add_arg(str(conn), 's')
         for i in struct.unpack('<8b ', data):
             builder.add_arg(i / 127, 'f')  # Normalize  #changed this to f because it was giving an eror
-        self.osc.send(builder.build())
 
-    def handle_imu(self, payload):
+
+    def handle_imu(self, payload,myo_driver):
         """
         Handle IMU data.
         :param payload: imu data in a single byte array.
         """
+        connection_id = payload['connection']
+        device_name = myo_driver.get_device_name(connection_id)
+        if self.printEmg:
+            print("EMG", payload['connection'], payload['atthandle'], payload['value'])
+
         if self.printImu:
             print("IMU", payload['connection'], payload['atthandle'], payload['value'])
         # Send orientation
@@ -67,21 +78,21 @@ class DataHandler:
         builder.add_arg(roll / math.pi, 'f')
         builder.add_arg(pitch / math.pi, 'f')
         builder.add_arg(yaw / math.pi, 'f')
-        self.osc.send(builder.build())
+     
 
         # Send accelerometer
         data = payload['value'][8:14]
         builder = udp_client.OscMessageBuilder("/myo/accel")
         builder.add_arg(str(payload['connection']), 's')
         builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
-        self.osc.send(builder.build())
+     
 
         # Send gyroscope
         data = payload['value'][14:20]
         builder = udp_client.OscMessageBuilder("/myo/gyro")
         builder.add_arg(str(payload['connection']), 's')
         builder.add_arg(self._vector_magnitude(*(struct.unpack('hhh', data))), 'f')
-        self.osc.send(builder.build())
+      
 
     @staticmethod
     def _euler_angle(w, x, y, z):
