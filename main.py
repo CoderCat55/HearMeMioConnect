@@ -1,72 +1,102 @@
-"""
-This is the main file of my code.
-Functions: create a mdns webserver named "hearme" as a hotspot. in raspi
-import important things from mio connect 
-
-"""
 from mioconnect.src.myodriver import MyoDriver
 from mioconnect.src.config import Config
-#import webserberlibrary
-"""I used to create a AP in esp32 but raspberyy probobaly can connect to phone's internet and maintain http protocol?
-Is this true if so how?
+import serial
+import getopt
+import sys
 
-because otherwise it wants additional dongle ? why
 
-I need my raspberyy pi to open a http server which we can conenct even though we are in a place which doesnt have any wifi networks
-https://raspberrypi.stackexchange.com/questions/117526/how-to-create-a-wireless-and-own-rpi-wifi-network
+def main(argv):
+    config = Config()
 
-"""
+    # Get options and arguments
+    try:
+        opts, args = getopt.getopt(argv, 'hsn:a:p:v', ['help', 'shutdown', 'nmyo', 'address', 'port', 'verbose'])
+    except getopt.GetoptError:
+        sys.exit(2)
+    turnoff = False
+    for opt, arg in opts:
+        if opt in ('-h', '--help'):
+            print_usage()
+            sys.exit()
+        elif opt in ('-s', '--shutdown'):
+            turnoff = True
+        elif opt in ("-n", "--nmyo"):
+            config.MYO_AMOUNT = int(arg)
+        elif opt in ("-a", "--address"):
+            config.OSC_ADDRESS = arg
+        elif opt in ("-p", "--port"):
+            config.OSC_PORT = arg
+        elif opt in ("-v", "--verbose"):
+            config.VERBOSE = True
 
-"""
-might add getdata endpoint for showing data inside the app (not now)
-"""
-"""
+    # Run
+    myo_driver = None
+    try:
+        # Init
+        myo_driver = MyoDriver(config)
 
-"""
-#init 
-config = Config()
-myo_driver = MyoDriver(config)
-
-#http post or get requests refernce from old code 
-def webserver():
-    #initialize mdns server with "hearme"
-    print("meow")
-    endpoints= [ 
-         'classify',
-         'stopclassify'
-        'calibrate',
-         'disconnect',
-         'connect',
-         'train',
-         'getdata'
-                ]
-    """These endpoint trigger relative functions """
-
-    
-def Classify():
-    print("meow")
-
-def Stopclassify():
-     print("meow")
-
-def Calibrate(gestureidORname):
-    print("meow")
-
-def Connect():
-    # Connect
+        # Connect
         myo_driver.run()
 
-def Disconnect():
-    myo_driver.disconnect_all()
+        if turnoff:
+            # Turn off
+            myo_driver.deep_sleep_all()
+            return
+
+        if Config.GET_MYO_INFO:
+            # Get info
+            myo_driver.get_info()
+
+        print("Ready for data.")
+        print()
+
+        # Receive and handle data
+        while True:
+            myo_driver.receive()
+
+    except KeyboardInterrupt:
+        print("Interrupted.")
+
+    except serial.serialutil.SerialException:
+        print("ERROR: Couldn't open port. Please close MyoConnect and any program using this serial port.")
+
+    finally:
+        print("Disconnecting...")
+        if myo_driver is not None:
+            if Config.DEEP_SLEEP_AT_KEYBOARD_INTERRUPT:
+                myo_driver.deep_sleep_all()
+            else:
+                myo_driver.disconnect_all()
+        print("Disconnected")
+
+
+def Classify():
     print("meow")
+    #tell sckit to classify and return the data
+
+def Calibrate(gesturename):
+    print("meow")
+    #should we handle this here or anywhere else?
+
 
 def Train():
     print("meow")
+    #tell sckit to train the itself
 
 def Command():
-    print("meow")
+    value = input("Enter your command majesty: ")
+    match value:
+        case "train":
+            print("now will run train function")
+            Train()
+        case "classify":
+            print("now will run classify function")
+            Classify()
+        case "calibrate":
+            print("now will run calibrate function")
+            Calibrate()
+        case _:
+            print("doğru düzgün komut yazsana biz böyle mi çalışacaz?")
 
-def Getdata():
-    #this triggers to get data 
-    print("meow")
- 
+if __name__ == "__main__":
+    main(sys.argv[1:])
