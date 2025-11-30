@@ -1,7 +1,27 @@
 from pythonosc import udp_client
 import struct
 import math
+import time
 
+"""we need to delete the osc
+   probobaly also need to add time for data
+   also use device name not connection ID
+"""
+"""
+Here is how to get device name. I dont want to use conenction ID because armbands can connect at different orders.
+
+  def _get_device_name(self, connection_id):
+        #Get device name from connection ID
+        for myo in self.myo_driver.myos:
+            if myo.connection_id == connection_id:
+                return myo.device_name
+        return None
+
+# Get device name from MyoDriver
+device_name = self._get_device_name(connection_id)
+    if device_name is None:
+        return  # Myo info not available yet
+"""
 
 class DataHandler:
     """
