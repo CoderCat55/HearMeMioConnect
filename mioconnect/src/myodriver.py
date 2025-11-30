@@ -13,7 +13,6 @@ class MyoDriver:
     def __init__(self, config, shared_buffer=None, buffer_index=None):
         self.config = config
         self.data_handler = DataHandler(self.config, shared_buffer, buffer_index)
-        self.data_handler = DataHandler(self.config)
         self.bluetooth = Bluetooth(self.config.MESSAGE_DELAY)
 
         self.myos = []
@@ -125,7 +124,7 @@ class MyoDriver:
         return True
     def get_device_name(self, connection_id):
         #Get device name from connection ID
-        for myo in self.myo_driver.myos:
+        for myo in self.myos:
             if myo.connection_id == connection_id:
                 return myo.device_name
         return None

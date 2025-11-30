@@ -33,7 +33,10 @@ class GestureClassifier:
             gesture_name = file.split('/')[-1].split('.')[0]
             data = np.load(file)
             self.calibration_data[gesture_name] = data
-
+    def extract_features(current_data):
+        """Extract statistical features from time series"""
+        # This could be in sckit.py as a static method
+        pass
 """
 So add_calibration_sample() is for:
 During runtime: Adding newly recorded calibration

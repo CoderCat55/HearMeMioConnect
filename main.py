@@ -15,6 +15,19 @@ config = Config()
 myo_driver = MyoDriver(config)
 
 # Shared resources
+STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
+CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
+
+# Streaming buffer (circular, always running)
+shm_stream = shared_memory.SharedMemory(create=True, size=STREAM_BUFFER_SIZE*34*4)
+stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
+
+# Calibration buffer (fixed, used only during recording)
+shm_calib = shared_memory.SharedMemory(create=True, size=CALIBRATION_BUFFER_SIZE*34*4)
+calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_calib.buf)
+
+# Shared index for calibration buffer
+calib_index = mp.Value('i', 0)  # Current write position in calibration buffer
 shared_mem = None
 recording_flag = mp.Value('i', 0)  # 0 = not recording, 1 = recording
 recording_gesture = mp.Array('c', 50)  # Gesture name (50 char max)
@@ -36,7 +49,16 @@ def data_acquisition_process(shared_mem_name, recording_flag, recording_gesture)
     while True:
         myo_driver.receive()
 
+def get_calibration_buffer_from_shared_mem():
+    """Read the most recent 3 seconds of calibration data"""
+    # PROBLEM: We need a SEPARATE calibration buffer!
+    # The streaming buffer is circular and gets overwritten
+    # Solution: Use a dedicated calibration buffer
+    pass
 
+def get_recent_data_from_shared_mem(window_seconds=1.0):
+    """Read the last N seconds from the streaming buffer"""
+    pass
 
 def Calibrate(gesture_name):
     """Called from main process when user wants to calibrate"""
@@ -63,6 +85,12 @@ def Calibrate(gesture_name):
     np.save(f'calibration_data/{gesture_name}_{timestamp}.npy', recorded_data)
     
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
+
+def extract_features(current_data):
+    """Extract statistical features from time series"""
+    # This could be in sckit.py as a static method which onee???
+    #sckit or main.py?
+    pass
 
 def Classify():
     """Called from main process when user wants to classify"""
