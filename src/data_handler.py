@@ -36,12 +36,16 @@ class DataHandler:
         sample1 = struct.unpack('<8b', raw_data[0:8])   # First sample: 8 signed bytes
         sample2 = struct.unpack('<8b', raw_data[8:16])  # Second sample: 8 signed bytes
         
-        timestamp = time.time()
+        # First sample timestamp
+        timestamp1 = time.time()
+
+        # Second sample was captured 5ms earlier
+        timestamp2 = timestamp1 + 0.005  # 200 Hz = 5ms between samples
         
         # Create data packets for both samples
         data_packet1 = {
             'type': 'emg',
-            'timestamp': timestamp,
+            'timestamp': timestamp1,
             'device_name': device_name,
             'connection_id': connection_id,
             'data': sample1,  # raw values
@@ -50,7 +54,7 @@ class DataHandler:
     
         data_packet2 = {
             'type': 'emg', 
-            'timestamp': timestamp + 0.005,
+            'timestamp': timestamp2,
             'device_name': device_name,
             'connection_id': connection_id,
             'data': sample2,  # raw values
