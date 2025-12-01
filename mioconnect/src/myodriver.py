@@ -1,9 +1,9 @@
 import sys
 import time
-from src.public.myohw import *
-from src.myo import Myo
-from src.bluetooth import Bluetooth
-from src.data_handler import DataHandler
+from .public.myohw import *
+from .myo import Myo
+from .bluetooth import Bluetooth
+from .data_handler import DataHandler
 
 
 class MyoDriver:

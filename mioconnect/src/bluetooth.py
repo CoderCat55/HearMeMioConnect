@@ -1,9 +1,9 @@
 from serial.tools.list_ports import comports
 import serial
-from src.public.bglib import BGLib
+from .public.bglib import BGLib
 import re
 import time
-from src.public.myohw import *
+from .public.myohw import *
 
 
 class Bluetooth:
