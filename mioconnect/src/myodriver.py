@@ -46,7 +46,7 @@ class MyoDriver:
                 "*** Connecting myo " + str(len(self.myos) + 1) + " out of " + str(self.config.MYO_AMOUNT) + " ***")
             print()
             self.add_myo_connection()
-        self.receive()
+        print("All Myos connected!")
 
     def receive(self):
         self.bluetooth.receive()
@@ -135,12 +135,26 @@ class MyoDriver:
         print("Myo ready", myo_to_connect.connection_id, myo_to_connect.address)
         print()
         return True
+    
     def get_device_name(self, connection_id):
         #Get device name from connection ID
         for myo in self.myos:
             if myo.connection_id == connection_id:
                 return myo.device_name
         return None
+    def ensure_device_names_ready(self):
+        """
+        Ensure device names are loaded before data starts flowing.
+        Call this AFTER run() and BEFORE starting data stream.
+        """
+        if self.config.GET_MYO_INFO and len(self.myos) > 0:
+            print("Fetching device names...")
+            self.get_info()
+            print("Device names ready:")
+            for myo in self.myos:
+                print(f"  - {myo.device_name} (connection {myo.connection_id})")
+        else:
+            print("WARNING: Skipping device name fetch - using connection IDs")
 
 ##############################################################################
 #                                  HANDLERS                                  #

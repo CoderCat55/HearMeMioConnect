@@ -35,17 +35,17 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index,
     )
     
     # Connect to Myos
-    myo_driver.run()
+    myo_driver.run()  # Now returns after connections complete!
     
-    if Config.GET_MYO_INFO:
-        myo_driver.get_info()
+    # CRITICAL: Get device names BEFORE data starts flowing
+    myo_driver.ensure_device_names_ready()
     
     print("Data acquisition process ready!")
     
-    # Run forever
+    # Run forever - NOW this works correctly
     while True:
         myo_driver.receive()
-
+        
 def get_calibration_buffer_from_shared_mem(calib_buffer, calib_index):
     """Read recorded calibration data"""
     # Return only the filled portion of the buffer
@@ -68,16 +68,21 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
         # Buffer hasn't filled yet
         return stream_buffer[:current_idx].copy()
     else:
-        # Get last N samples (accounting for circular nature)
-        start_idx = current_idx - num_samples
-        if start_idx >= 0 and current_idx <= len(stream_buffer):
-            return stream_buffer[start_idx:current_idx].copy()
+        # Calculate wrapped indices
+        buffer_size = len(stream_buffer)
+        start_idx_wrapped = (current_idx - num_samples) % buffer_size
+        current_idx_wrapped = current_idx % buffer_size
+        
+        # Check if we need to wrap around
+        if start_idx_wrapped < current_idx_wrapped:
+            # No wrap-around needed
+            return stream_buffer[start_idx_wrapped:current_idx_wrapped].copy()
         else:
-            # Handle wrap-around
-            start_part = stream_buffer[(current_idx % len(stream_buffer)):]
-            end_part = stream_buffer[(start_idx % len(stream_buffer)):]
-            return np.concatenate([end_part, start_part])
-
+            # Wrap-around: get two parts and concatenate in correct order
+            part1 = stream_buffer[start_idx_wrapped:]  # From start to end of buffer
+            part2 = stream_buffer[:current_idx_wrapped]  # From beginning to current
+            return np.concatenate([part1, part2])
+        
 def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
               recording_gesture, classifier):
     """Called from main process when user wants to calibrate"""
