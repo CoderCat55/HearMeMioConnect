@@ -1,4 +1,4 @@
-from src.public.myohw import *
+from .public.myohw import *
 import struct
 
 
