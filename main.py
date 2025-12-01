@@ -36,7 +36,6 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index,
     
     # Connect to Myos
     myo_driver.run()  # Now returns after connections complete!
-    
     # CRITICAL: Get device names BEFORE data starts flowing
     myo_driver.ensure_device_names_ready()
     
@@ -199,6 +198,11 @@ if __name__ == "__main__":
     )
     data_process.daemon = True  # Dies when main process dies
     data_process.start()
+    time.sleep(2)  # wait for dataprocess to start
+
+    if not data_process.is_alive():
+        print("ERROR: Data acquisition process failed to start!")
+        print("Check if Myo dongle is connected and MyoConnect is closed")
     
     # Give it time to connect
     print("Connecting to Myo armbands...")
