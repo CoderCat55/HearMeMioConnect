@@ -22,14 +22,14 @@ Also we need to get data not using connection id we need to get data with device
             triggers realtime data getting using mioconnect for a specified time then saves data to shared memory
 
 Thank for your time now.  
-2. Device Name Not Available During Connection
-    Pass callback to notify when Myos are ready
-3. Myo Device Name Identification Logic
-    Use actual device names but don't hardcode them
-4- I know I am not using 2 emg datas for a reason its  okay
-6-6. Missing sklearn Import
-Is there any prpblem that prevents me from naming my program sckit.py
-I think I have imported it correctly
+❌ Issue 5: STILL BROKEN - Circular Buffer Logic
+I need the complete code for  def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=1.0):
+
+So as I understand I already have a function for getting myos names I just need to get them right?
+I need to know myos names after connection before data acquisition starts. I cannnot do anyhting without my myo names are present.
+What if we have a function in myodriver for getting device names and we call it when needed.
+Issue 7 is also related 
+I need the code changes for this. Where to change in which file. what are deleted in each file.
 
 Look at my code again
 detailly list all the other changes needed

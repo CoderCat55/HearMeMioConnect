@@ -109,11 +109,9 @@ class DataHandler:
         
         # Store in latest values
         imu_values = np.array([roll, pitch, yaw, ax, ay, az, gx, gy, gz], dtype=np.float32)
-        
-        if device_name == "Myo-0":  # Adjust based on actual names
-            self.myo1_latest[8:17] = imu_values
-        else:
-            self.myo2_latest[8:17] = imu_values
+                    
+        self.myo1_latest[8:17] = imu_values
+        self.myo2_latest[8:17] = imu_values
         
         # Combine data from both Myos and write to buffer
         self._write_combined_sample(timestamp)
@@ -144,12 +142,16 @@ class DataHandler:
             self.stream_buffer[idx] = sample
             self.stream_index.value += 1
             
-            # If recording, also write to calibration buffer
-            if self.recording_flag.value == 1 and self.calib_index.value < len(self.calib_buffer):
-                self.calib_buffer[self.calib_index.value] = sample
-                self.calib_index.value += 1
+            if self.recording_flag.value == 1:
+                if self.calib_index.value < len(self.calib_buffer):
+                    self.calib_buffer[self.calib_index.value] = sample
+                    self.calib_index.value += 1
+                elif self.calib_index.value == len(self.calib_buffer):
+                    # Print once when buffer full
+                    print("WARNING: Calibration buffer full!")
         
         self.local_buffer.clear()
+        print("Cleaning local buffer")
 
     @staticmethod
     def _euler_angle(w, x, y, z):

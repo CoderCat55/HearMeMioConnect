@@ -2,7 +2,7 @@
 import multiprocessing as mp
 from multiprocessing import Process, shared_memory
 import numpy as np
-from sckit import GestureClassifier
+from model import GestureClassifier
 import time
 
 # Constants
@@ -101,7 +101,7 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     
     # Stop recording
     recording_flag.value = 0
-    
+    time.sleep(0.5)  # Let final batch flush
     # Read recorded data
     recorded_data = get_calibration_buffer_from_shared_mem(calib_buffer, calib_index)
     
