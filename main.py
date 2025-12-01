@@ -74,8 +74,8 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             return stream_buffer[start_idx:current_idx].copy()
         else:
             # Handle wrap-around
+            start_part = stream_buffer[(current_idx % len(stream_buffer)):]
             end_part = stream_buffer[(start_idx % len(stream_buffer)):]
-            start_part = stream_buffer[current_idx % len((stream_buffer)):]
             return np.concatenate([end_part, start_part])
 
 def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 

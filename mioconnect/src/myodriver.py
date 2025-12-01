@@ -14,11 +14,9 @@ class MyoDriver:
              calib_buffer=None, calib_index=None, recording_flag=None,
              recording_gesture=None):
         self.config = config
-        self.data_handler = DataHandler(self.config, shared_buffer, buffer_index)
         self.bluetooth = Bluetooth(self.config.MESSAGE_DELAY)
 
-        # Initialize data_handler AFTER bluetooth, BEFORE connecting
-        # We'll pass self after Myos are connected
+        self.myos = []
         self.data_handler = DataHandler(
             config,
             stream_buffer=stream_buffer,
@@ -30,7 +28,7 @@ class MyoDriver:
             myo_driver=self  # Pass self for device name lookup
         )
     
-        self.myos = []
+        
 
         self.myo_to_connect = None
         self.scanning = False
