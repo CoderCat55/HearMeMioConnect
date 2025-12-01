@@ -1,5 +1,5 @@
-from src.myodriver import MyoDriver
-from src.config import Config
+from .myodriver import MyoDriver
+from .config import Config
 import serial
 import getopt
 import sys

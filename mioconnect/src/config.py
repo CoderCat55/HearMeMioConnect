@@ -1,7 +1,7 @@
 """
 Default values for the script. Can be overridden by system args.
 """
-from src.public.myohw import *
+from .public.myohw import *
 
 
 class Config:
