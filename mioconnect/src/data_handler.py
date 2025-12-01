@@ -43,7 +43,6 @@ class DataHandler:
         if self.printEmg:
             print(f"EMG from {device_name}: {payload['value']}")
         
-        # Extract BOTH samples (don't waste data!)
         sample1 = struct.unpack('<8b', payload['value'][0:8])   # First sample
         sample2 = struct.unpack('<8b', payload['value'][8:16])  # Second sample
         
@@ -75,8 +74,6 @@ class DataHandler:
             # Device name not yet identified
             return
 
-        # Combine data from both Myos and write to buffer
-        self._write_combined_sample(timestamp)
     
     def handle_imu(self, payload, myo_driver):
         """Handle IMU data"""
@@ -103,23 +100,24 @@ class DataHandler:
         gx, gy, gz = struct.unpack('hhh', gyro_data)
         
         timestamp = time.time()
+        
+        # initialization of myo names
+        if self.myo1_name is None:
+            self._identify_myos()
+        
+        imu_values = np.array([roll, pitch, yaw, ax, ay, az, gx, gy, gz], dtype=np.float32)
+        
+        # Store in latest values based on actual device name
         if device_name == self.myo1_name:
             self.myo1_latest[8:17] = imu_values
         elif device_name == self.myo2_name:
             self.myo2_latest[8:17] = imu_values
         else:
             # Device name not yet identified
-            return
-        
-        # Store in latest values
-        imu_values = np.array([roll, pitch, yaw, ax, ay, az, gx, gy, gz], dtype=np.float32)
-                    
-        self.myo1_latest[8:17] = imu_values
-        self.myo2_latest[8:17] = imu_values
-        
+            return    
         # Combine data from both Myos and write to buffer
         self._write_combined_sample(timestamp)
-    
+
     def _write_combined_sample(self, timestamp):
         """Combine data from both Myos and write to shared memory"""
         if self.stream_buffer is None:
@@ -155,7 +153,6 @@ class DataHandler:
                     print("WARNING: Calibration buffer full!")
         
         self.local_buffer.clear()
-        print("Cleaning local buffer")
 
     @staticmethod
     def _euler_angle(w, x, y, z):
