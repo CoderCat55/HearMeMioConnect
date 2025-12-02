@@ -36,9 +36,13 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index,
     
     # Connect to Myos
     myo_driver.run()  # Now returns after connections complete!
-    # CRITICAL: Get device names BEFORE data starts flowing
-    myo_driver.ensure_device_names_ready()
-    
+    # Verify both Myos have device names
+    if len(myo_driver.myos) >= 2:
+        for i, myo in enumerate(myo_driver.myos):
+            if myo.device_name is None:
+                print(f"✗ Warning: Myo {i} (connection {myo.connection_id}) has no device name!")
+            else:
+                print(f"✓ Myo {i}: {myo.device_name} (connection {myo.connection_id})")
     print("Data acquisition process ready!")
     
     # Run forever - NOW this works correctly

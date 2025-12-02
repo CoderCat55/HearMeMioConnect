@@ -129,6 +129,22 @@ class MyoDriver:
         # Disable sleep
         self.bluetooth.disable_sleep(myo_to_connect.connection_id)
 
+        if self.config.GET_MYO_INFO:
+            print(f"Fetching device name for connection {myo_to_connect.connection_id}...")
+            self.bluetooth.read_device_name(myo_to_connect.connection_id)
+            # Wait for device name to be set
+            max_wait = 20  # 2 seconds
+            wait_count = 0
+            while myo_to_connect.device_name is None and wait_count < max_wait:
+                self.receive()
+                wait_count += 1
+                time.sleep(0.1)
+            
+            if myo_to_connect.device_name:
+                print(f"✓ Device name: {myo_to_connect.device_name}")
+            else:
+                print(f"✗ Warning: Could not fetch device name for connection {myo_to_connect.connection_id}")
+                
         # Enable data and subscribe
         self.bluetooth.enable_data(myo_to_connect.connection_id, self.config)
 
