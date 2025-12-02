@@ -6,14 +6,12 @@ import numpy as np
 class DataHandler:
     def __init__(self, config, stream_buffer=None, stream_index=None, 
                  calib_buffer=None, calib_index=None, recording_flag=None,
-                 recording_gesture=None,myo_driver=None):
+                 recording_gesture=None, myo_driver=None):
         self.printEmg = config.PRINT_EMG
         self.printImu = config.PRINT_IMU
 
         # Store reference to myo_driver to get device names
         self.myo_driver = myo_driver
-        self.myo1_name = None
-        self.myo2_name = None
         
         # Streaming buffer (circular)
         self.stream_buffer = stream_buffer
@@ -25,13 +23,14 @@ class DataHandler:
         self.recording_flag = recording_flag
         self.recording_gesture = recording_gesture
         
-        # Latest values from each Myo (for real-time classification)
-        self.myo1_latest = np.zeros(17, dtype=np.float32)  # 8 EMG + 9 IMU
-        self.myo2_latest = np.zeros(17, dtype=np.float32)
+        # Use device names directly - map device names to arrays
+        # Initialize empty - will be filled when first data arrives
+        self.device_data = {}  # device_name -> [emg(8), imu(9)] = 17 values
         
         # Batch accumulation (write to shared memory in batches)
         self.local_buffer = []
         self.BATCH_SIZE = 20
+
     def handle_emg(self, payload, myo_driver):
         """Handle EMG data - Store RAW values (no normalization)"""
         connection_id = payload['connection']
@@ -48,39 +47,19 @@ class DataHandler:
         
         timestamp = time.time()
         
-        # Process both samples
-       # for sample in [sample1, sample2]:
-           # self._process_single_emg_sample(sample, device_name, timestamp)
+        # Process only first sample
         self._process_single_emg_sample(sample1, device_name, timestamp)
-   
-    def _identify_myos(self):
-        """Identify which Myo is which based on connection order"""
-        if self.myo_driver and len(self.myo_driver.myos) >= 2:
-            self.myo1_name = self.myo_driver.myos[0].device_name
-            self.myo2_name = self.myo_driver.myos[1].device_name
-            print(f"✓ Identified Myo1: {self.myo1_name}")
-            print(f"✓ Identified Myo2: {self.myo2_name}")
-        else:
-            print(f"✗ Cannot identify Myos yet. Count: {len(self.myo_driver.myos) if self.myo_driver else 0}")
-
     
     def _process_single_emg_sample(self, emg_data, device_name, timestamp):
         """Process a single EMG sample (8 channels)"""
-        # Lazy initialization of myo names
-        if self.myo1_name is None:
-            self._identify_myos()
+        # Initialize array for this device if not exists
+        if device_name not in self.device_data:
+            self.device_data[device_name] = np.zeros(17, dtype=np.float32)
+            print(f"✓ Initialized array for device: {device_name}")
         
-        # Store in latest values based on actual device name
-        if device_name == self.myo1_name:
-            self.myo1_latest[0:8] = emg_data
-            print(f"  → Stored in Myo1 array")
-        elif device_name == self.myo2_name:
-            self.myo2_latest[0:8] = emg_data
-            print(f"  → Stored in Myo2 array")
-        else:
-            # Device name not yet identified
-            return
-
+        # Store EMG data (first 8 values)
+        self.device_data[device_name][0:8] = emg_data
+        print(f"  → Stored EMG in {device_name} array")
     
     def handle_imu(self, payload, myo_driver):
         """Handle IMU data"""
@@ -92,7 +71,6 @@ class DataHandler:
         
         if self.printImu:
             print(f"IMU from {device_name}")
-        print(f"IMU from: {device_name}")  # ← ADD THIS+
         
         # Parse orientation (quaternion)
         data = payload['value'][0:8]
@@ -109,32 +87,38 @@ class DataHandler:
         
         timestamp = time.time()
         
-        # initialization of myo names
-        if self.myo1_name is None:
-            self._identify_myos()
+        # Initialize array for this device if not exists
+        if device_name not in self.device_data:
+            self.device_data[device_name] = np.zeros(17, dtype=np.float32)
+            print(f"✓ Initialized array for device: {device_name}")
         
         imu_values = np.array([roll, pitch, yaw, ax, ay, az, gx, gy, gz], dtype=np.float32)
         
-        # Store in latest values based on actual device name
-        if device_name == self.myo1_name:
-            self.myo1_latest[8:17] = imu_values
-            print(f"  → Stored IMU in Myo1 array")
-        elif device_name == self.myo2_name:
-            self.myo2_latest[8:17] = imu_values
-            print(f"  → Stored IMU in Myo2 array")
-        else:
-            # Device name not yet identified
-            return    
-        # Combine data from both Myos and write to buffer
-        self._write_combined_sample(timestamp)
+        # Store IMU data (last 9 values)
+        self.device_data[device_name][8:17] = imu_values
+        print(f"  → Stored IMU in {device_name} array")
+        
+        # Write combined sample only if we have data from 2 devices
+        if len(self.device_data) >= 2:
+            self._write_combined_sample(timestamp)
 
     def _write_combined_sample(self, timestamp):
         """Combine data from both Myos and write to shared memory"""
         if self.stream_buffer is None:
             return
         
-        # Combined sample: [myo1_emg(8), myo1_imu(9), myo2_emg(8), myo2_imu(9)] = 34 features
-        combined = np.concatenate([self.myo1_latest, self.myo2_latest])
+        # Get sorted device names to ensure consistent ordering
+        device_names = sorted(self.device_data.keys())
+        
+        if len(device_names) < 2:
+            return  # Need both devices
+        
+        # Combined sample: [device1_data(17), device2_data(17)] = 34 features
+        # Sorted alphabetically so "MyoITU" always comes before "MyoMarmara"
+        combined = np.concatenate([
+            self.device_data[device_names[0]],
+            self.device_data[device_names[1]]
+        ])
         
         # Accumulate in local buffer
         self.local_buffer.append((timestamp, combined))
@@ -154,6 +138,7 @@ class DataHandler:
             self.stream_buffer[idx] = sample
             self.stream_index.value += 1
             
+            # Also write to calibration buffer if recording
             if self.recording_flag.value == 1:
                 if self.calib_index.value < len(self.calib_buffer):
                     self.calib_buffer[self.calib_index.value] = sample
@@ -161,6 +146,7 @@ class DataHandler:
                 elif self.calib_index.value == len(self.calib_buffer):
                     # Print once when buffer full
                     print("WARNING: Calibration buffer full!")
+                    self.calib_index.value += 1  # Increment to avoid printing again
         
         self.local_buffer.clear()
 
