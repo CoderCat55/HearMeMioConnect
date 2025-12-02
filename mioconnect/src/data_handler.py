@@ -55,11 +55,11 @@ class DataHandler:
         # Initialize array for this device if not exists
         if device_name not in self.device_data:
             self.device_data[device_name] = np.zeros(17, dtype=np.float32)
-            print(f"✓ Initialized array for device: {device_name}")
+            #print(f"✓ Initialized array for device: {device_name}")
         
         # Store EMG data (first 8 values)
         self.device_data[device_name][0:8] = emg_data
-        print(f"  → Stored EMG in {device_name} array")
+        #print(f"  → Stored EMG in {device_name} array")
     
     def handle_imu(self, payload, myo_driver):
         """Handle IMU data"""
@@ -69,8 +69,8 @@ class DataHandler:
         if device_name is None:
             return
         
-        if self.printImu:
-            print(f"IMU from {device_name}")
+      # if self.printImu:
+            #print(f"IMU from {device_name}")
         
         # Parse orientation (quaternion)
         data = payload['value'][0:8]
@@ -90,13 +90,13 @@ class DataHandler:
         # Initialize array for this device if not exists
         if device_name not in self.device_data:
             self.device_data[device_name] = np.zeros(17, dtype=np.float32)
-            print(f"✓ Initialized array for device: {device_name}")
+            #print(f"✓ Initialized array for device: {device_name}")
         
         imu_values = np.array([roll, pitch, yaw, ax, ay, az, gx, gy, gz], dtype=np.float32)
         
         # Store IMU data (last 9 values)
         self.device_data[device_name][8:17] = imu_values
-        print(f"  → Stored IMU in {device_name} array")
+        #print(f"  → Stored IMU in {device_name} array")
         
         # Write combined sample only if we have data from 2 devices
         if len(self.device_data) >= 2:
