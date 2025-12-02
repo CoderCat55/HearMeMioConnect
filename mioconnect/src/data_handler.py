@@ -58,6 +58,11 @@ class DataHandler:
         if self.myo_driver and len(self.myo_driver.myos) >= 2:
             self.myo1_name = self.myo_driver.myos[0].device_name
             self.myo2_name = self.myo_driver.myos[1].device_name
+            print(f"✓ Identified Myo1: {self.myo1_name}")
+            print(f"✓ Identified Myo2: {self.myo2_name}")
+        else:
+            print(f"✗ Cannot identify Myos yet. Count: {len(self.myo_driver.myos) if self.myo_driver else 0}")
+
     
     def _process_single_emg_sample(self, emg_data, device_name, timestamp):
         """Process a single EMG sample (8 channels)"""
@@ -68,8 +73,10 @@ class DataHandler:
         # Store in latest values based on actual device name
         if device_name == self.myo1_name:
             self.myo1_latest[0:8] = emg_data
+            print(f"  → Stored in Myo1 array")
         elif device_name == self.myo2_name:
             self.myo2_latest[0:8] = emg_data
+            print(f"  → Stored in Myo2 array")
         else:
             # Device name not yet identified
             return
@@ -85,6 +92,7 @@ class DataHandler:
         
         if self.printImu:
             print(f"IMU from {device_name}")
+        print(f"IMU from: {device_name}")  # ← ADD THIS+
         
         # Parse orientation (quaternion)
         data = payload['value'][0:8]
@@ -110,8 +118,10 @@ class DataHandler:
         # Store in latest values based on actual device name
         if device_name == self.myo1_name:
             self.myo1_latest[8:17] = imu_values
+            print(f"  → Stored IMU in Myo1 array")
         elif device_name == self.myo2_name:
             self.myo2_latest[8:17] = imu_values
+            print(f"  → Stored IMU in Myo2 array")
         else:
             # Device name not yet identified
             return    

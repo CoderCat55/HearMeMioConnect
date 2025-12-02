@@ -199,6 +199,9 @@ if __name__ == "__main__":
     data_process.daemon = True  # Dies when main process dies
     data_process.start()
     time.sleep(2)  # wait for dataprocess to start
+    # Give it time to connect
+    print("Connecting to Myo armbands...")
+    time.sleep(5)
 
     if not data_process.is_alive():
         print("ERROR: Data acquisition process failed to start!")
