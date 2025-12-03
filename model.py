@@ -4,10 +4,14 @@ reads realtime data from shared memory for a fixed time and classifies returns r
 """
 from sklearn import svm
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import confusion_matrix, classification_report
 import glob
 import numpy as np
 import pickle
 import os
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import skew, kurtosis
 
 class GestureClassifier:
     def __init__(self):
@@ -19,36 +23,35 @@ class GestureClassifier:
     @staticmethod
     def extract_features(time_series_data):
         """
-        Extract statistical features from time series
+        Extract enhanced statistical features from time series
         time_series_data shape: (time_steps, 34) - time series from both myos
         Returns: 1D feature vector
         """
         features = []
         
-        # Extract features from each channel (34 channels total)
         for channel in range(time_series_data.shape[1]):
             channel_data = time_series_data[:, channel]
             
-            # Statistical features
+            # Enhanced statistical features
             features.extend([
                 np.mean(channel_data),
                 np.std(channel_data),
                 np.min(channel_data),
                 np.max(channel_data),
                 np.max(channel_data) - np.min(channel_data),  # Range
+                np.median(channel_data),
+                skew(channel_data),
+                kurtosis(channel_data),
+                np.sqrt(np.mean(channel_data**2)),  # RMS
             ])
         
-        # Total features: 34 channels * 5 features = 170 features
+        # Total features: 34 channels * 9 features = 306 features
         return np.array(features)
     
     def add_calibration_sample(self, gesture_name, time_series_data):
-        """
-        Add a new calibration sample
-        time_series_data shape: (time_steps, 34)
-        """
+        """Add a new calibration sample"""
         if gesture_name not in self.calibration_data:
             self.calibration_data[gesture_name] = []
-        
         self.calibration_data[gesture_name].append(time_series_data)
         print(f"Added calibration sample for '{gesture_name}'. Total: {len(self.calibration_data[gesture_name])}")
     
@@ -87,22 +90,12 @@ class GestureClassifier:
         return True
     
     def classify(self, features):
-        """
-        Classify a feature vector
-        features: 1D numpy array of features
-        Returns: gesture name (string)
-        """
+        """Classify a feature vector"""
         if self.model is None:
             return "ERROR: Model not trained yet!"
-        
-        # Reshape if needed
         if len(features.shape) == 1:
             features = features.reshape(1, -1)
-        
-        # Normalize
         features_scaled = self.scaler.transform(features)
-        
-        # Predict
         prediction = self.model.predict(features_scaled)
         return prediction[0]
     
@@ -111,17 +104,14 @@ class GestureClassifier:
         if self.model is None:
             print("ERROR: No model to save!")
             return
-        
         model_data = {
             'model': self.model,
             'scaler': self.scaler,
             'gesture_labels': self.gesture_labels,
             'calibration_data': self.calibration_data
         }
-        
         with open(filepath, 'wb') as f:
             pickle.dump(model_data, f)
-        
         print(f"Model saved to {filepath}")
     
     def load_model(self, filepath):
@@ -129,15 +119,12 @@ class GestureClassifier:
         if not os.path.exists(filepath):
             print(f"Model file {filepath} not found")
             return False
-        
         with open(filepath, 'rb') as f:
             model_data = pickle.load(f)
-        
         self.model = model_data['model']
         self.scaler = model_data['scaler']
         self.gesture_labels = model_data['gesture_labels']
         self.calibration_data = model_data['calibration_data']
-        
         print(f"Model loaded from {filepath}")
         return True
     
@@ -146,20 +133,40 @@ class GestureClassifier:
         if not os.path.exists('calibration_data'):
             print("No calibration data directory found")
             return
-        
         files = glob.glob('calibration_data/*.npy')
         if not files:
             print("No calibration files found")
             return
-        
         for file in files:
-            # Extract gesture name from filename (remove timestamp)
             basename = os.path.basename(file)
-            gesture_name = basename.split('_')[0]  # Get part before first underscore
-            
+            gesture_name = basename.split('_')[0]
             data = np.load(file)
             if gesture_name not in self.calibration_data:
                 self.calibration_data[gesture_name] = []
             self.calibration_data[gesture_name].append(data)
-        
         print(f"Loaded calibration data for {len(self.calibration_data)} gestures")
+    
+    def evaluate(self, X_test, y_test):
+        """
+        Evaluate the model on a test set and display confusion matrix
+        X_test: list of np.arrays (time series)
+        y_test: list of labels
+        """
+        if self.model is None:
+            print("ERROR: Model not trained!")
+            return
+        # Extract features
+        X_features = np.array([self.extract_features(x) for x in X_test])
+        # Predict
+        y_pred = [self.classify(x) for x in X_features]
+        # Confusion matrix
+        cm = confusion_matrix(y_test, y_pred, labels=self.gesture_labels)
+        print("Classification Report:\n", classification_report(y_test, y_pred))
+        # Plot confusion matrix
+        plt.figure(figsize=(8,6))
+        sns.heatmap(cm, annot=True, fmt='d', xticklabels=self.gesture_labels,
+                    yticklabels=self.gesture_labels, cmap='Blues')
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.title('Confusion Matrix')
+        plt.show()
