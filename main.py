@@ -89,6 +89,11 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
 def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
               recording_gesture, classifier):
     """Called from main process when user wants to calibrate"""
+    print(f"Calibration will start in ", end='', flush=True)
+    for i in range(5, 0, -1):
+        print(f"{i}... ", end='', flush=True)
+        time.sleep(1)
+    print("\n")
     print(f"Recording calibration for '{gesture_name}' - 3 seconds...")
     
     # Reset calibration buffer
