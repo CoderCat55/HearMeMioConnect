@@ -34,7 +34,7 @@ class GestureClassifier:
         
         return np.array(features)
 
-    def _create_windows(self, data, window_size=50, step_size=30):
+    def _create_windows(self, data, window_size=30, step_size=10):
         # step_size artırıldı → pencereler daha az üst üste biner
         windows = []
         if len(data) < window_size:
@@ -71,7 +71,7 @@ class GestureClassifier:
             gesture_window_count = 0
             
             for time_series in raw_samples:
-                windows = self._create_windows(time_series, window_size=50, step_size=30)
+                windows = self._create_windows(time_series, window_size=30, step_size=10)
                 
                 for window in windows:
                     features = self.extract_features(window)
@@ -98,7 +98,7 @@ class GestureClassifier:
         
         # Train SVM with moderate C to reduce overfitting
         print("Training SVM model...")
-        self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale')
+        self.model = svm.SVC(kernel='rbf', C=0.1, gamma='scale')
         self.model.fit(X_train_scaled, y_train)
         
         # Cross-validation on training set
