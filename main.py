@@ -160,8 +160,8 @@ def Classify(stream_buffer, stream_index, classifier):
 def Train(classifier):
     """Called from main process when user wants to train"""
     print("Training model...")
-    success = classifier.train()
-    if success:
+    success, accuracy = classifier.train()
+    if success: # This checks if the first returned value is True
         classifier.save_model('model.pkl')
         print("Training complete!")
     else:
