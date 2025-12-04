@@ -226,7 +226,7 @@ if __name__ == "__main__":
     time.sleep(5)
     
     # Initialize classifier in main process
-    classifier = GestureClassifier()
+    classifier = GestureClassifier(base_model_name='SVM')
     classifier.load_calibration_data()
     
     print("\nSystem ready! Available commands: tr= train, cf =classify,cb= calibrate")
