@@ -70,39 +70,51 @@ class GestureClassifier:
         
         print("\n--- Starting Training Process ---")
         print("Processing calibration data (Windowing & Feature Extraction)...")
-        
-        X = []
-        y = []
-        
+
+        # --- MODIFIED DATA SPLITTING LOGIC ---
+        # We must split the *raw recordings* first to prevent data leakage.
+        # We will split recordings for each gesture into train and test sets.
+        train_recordings = {}
+        test_recordings = {}
+        for gesture_name, recordings in self.calibration_data.items():
+            if len(recordings) < 2:
+                print(f"WARNING: Gesture '{gesture_name}' has only {len(recordings)} recording(s). It will only be used for training. For proper evaluation, please collect at least 2 recordings per gesture.")
+                train_recordings[gesture_name] = recordings
+                test_recordings[gesture_name] = []
+            else:
+                # Split the list of recordings for this gesture
+                rec_train, rec_test = train_test_split(recordings, test_size=0.25, random_state=42)
+                train_recordings[gesture_name] = rec_train
+                test_recordings[gesture_name] = rec_test
+                print(f"  - '{gesture_name}': {len(rec_train)} recordings for training, {len(rec_test)} for testing.")
+
+        def process_recordings(recordings_dict):
+            """Helper function to create windowed features from a dictionary of recordings."""
+            X, y = [], []
+            total_windows = 0
+            for gesture_name, recordings in recordings_dict.items():
+                gesture_window_count = 0
+                for time_series in recordings:
+                    windows = self._create_windows(time_series, window_size=30, step_size=10)
+                    for window in windows:
+                        features = self.extract_features(window)
+                        if np.all(np.isfinite(features)):
+                            X.append(features)
+                            y.append(gesture_name)
+                            gesture_window_count += 1
+                total_windows += gesture_window_count
+            return np.array(X), np.array(y)
+
+        # Create training and testing sets from the split recordings
+        X_train, y_train = process_recordings(train_recordings)
+        X_test, y_test = process_recordings(test_recordings)
+
+        if len(X_test) == 0:
+            print("ERROR: Test set is empty. Cannot evaluate model. Ensure you have at least 2 recordings for one or more gestures.")
+            return False
+
         self.gesture_labels = sorted(self.calibration_data.keys())
-        total_windows = 0
-        
-        for gesture_name in self.gesture_labels:
-            raw_samples = self.calibration_data[gesture_name]
-            gesture_window_count = 0
-            
-            # Using smaller window_size=30 and step_size=10
-            for time_series in raw_samples:
-                windows = self._create_windows(time_series, window_size=30, step_size=10)
-                
-                for window in windows:
-                    features = self.extract_features(window)
-                    if np.all(np.isfinite(features)):
-                        X.append(features)
-                        y.append(gesture_name)
-                        gesture_window_count += 1
-            
-            print(f"  - '{gesture_name}': Created {gesture_window_count} training samples.")
-            total_windows += gesture_window_count
-        
-        X = np.array(X)
-        y = np.array(y)
-        print(f"Total training dataset size: {len(X)} samples.")
-        
-        # Split for final evaluation
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.25, random_state=42, stratify=y
-        )
+        print(f"Total training samples: {len(X_train)}, Total testing samples: {len(X_test)}")
         
         # Normalize: Mandatory for SVM, harmless for RF
         X_train_scaled = self.scaler.fit_transform(X_train)
