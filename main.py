@@ -135,11 +135,13 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
 
 def Classify(stream_buffer, stream_index, classifier):
     """Called from main process when user wants to classify"""
+    """"
     print(f"Classify will start in ", end='', flush=True)
     for i in range(5, 0, -1):
         print(f"{i}... ", end='', flush=True)
         time.sleep(1)
     print("\n")
+    """
     print("Classifying gesture...")
     
     # Read current data from shared memory (last 1 second)
@@ -182,6 +184,11 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             gesture_name = input("Which gesture would you like to calibrate? ")
             Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
                      recording_gesture, classifier)
+        case "cfloop": # classify loop <3
+            print("now will run classify function")
+            for i in range(20):
+                Classify(stream_buffer, stream_index, classifier)
+                time.sleep(1)
         case _:
             print("Invalid command! Use: train, classify, or calibrate")
 
