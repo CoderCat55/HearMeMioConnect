@@ -147,17 +147,23 @@ class GestureClassifier:
             print("No calibration data directory found")
             return
         
-        files = glob.glob('calibration_data/*.npy')
+        # Look for CSV files
+        import glob
+        files = glob.glob('calibration_data/*.csv')
         if not files:
             print("No calibration files found")
             return
         
+        import pandas as pd
         for file in files:
-            # Extract gesture name from filename (remove timestamp)
+            # Extract gesture name from filename (remove timestamp and extension)
             basename = os.path.basename(file)
             gesture_name = basename.split('_')[0]  # Get part before first underscore
             
-            data = np.load(file)
+            # Load CSV
+            df = pd.read_csv(file)
+            data = df.values  # Convert to numpy array
+            
             if gesture_name not in self.calibration_data:
                 self.calibration_data[gesture_name] = []
             self.calibration_data[gesture_name].append(data)

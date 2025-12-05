@@ -9,6 +9,18 @@ class DataHandler:
                  recording_gesture=None, myo_driver=None):
         self.printEmg = config.PRINT_EMG
         self.printImu = config.PRINT_IMU
+        def store_device_names(self, device_names_shared):
+            """Store device names to shared memory for main process"""
+            if len(self.device_data) < 2:
+                return  # Not ready yet
+            
+            device_names = sorted(self.device_data.keys())
+            
+            for i, name in enumerate(device_names[:2]):  # Only first 2 devices
+                name_bytes = name.encode('utf-8')
+                for j, byte in enumerate(name_bytes):
+                    if j < len(device_names_shared[i]):
+                        device_names_shared[i][j] = byte
 
         # Store reference to myo_driver to get device names
         self.myo_driver = myo_driver
@@ -112,7 +124,6 @@ class DataHandler:
         
         if len(device_names) < 2:
             return  # Need both devices
-        
         # Combined sample: [device1_data(17), device2_data(17)] = 34 features
         # Sorted alphabetically so "MyoITU" always comes before "MyoMarmara"
         combined = np.concatenate([

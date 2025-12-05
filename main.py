@@ -8,9 +8,9 @@ import time
 # Constants
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
 CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
+MAX_DEVICE_NAME_LENGTH = 50
 
-def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index, 
-                            calib_index, recording_flag, recording_gesture):
+def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index, calib_index, recording_flag, recording_gesture,device_names_shared):
     """Process 1: Continuously acquires data from Myo armbands"""
     from mioconnect.src.myodriver import MyoDriver
     from mioconnect.src.config import Config
@@ -33,6 +33,10 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index,
         recording_flag=recording_flag,
         recording_gesture=recording_gesture
     )
+    myo_driver.store_device_names_to_shared(device_names_shared)
+    # Create shared memory for device names (2 devices, 50 chars each)
+    device_names_shared = [mp.Array('c', MAX_DEVICE_NAME_LENGTH), 
+                        mp.Array('c', MAX_DEVICE_NAME_LENGTH)]
     
     # Connect to Myos
     myo_driver.run()  # Now returns after connections complete!
@@ -87,7 +91,7 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             return np.concatenate([part1, part2])
         
 def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-              recording_gesture, classifier):
+              recording_gesture, classifier, device_names_shared):
     """Called from main process when user wants to calibrate"""
     print(f"Calibration will start in ", end='', flush=True)
     for i in range(5, 0, -1):
@@ -101,9 +105,9 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     
     # Set flag in shared memory
     gesture_bytes = gesture_name.encode('utf-8')
-    for i, byte in enumerate(gesture_bytes[:50]):  # Max 50 chars
+    for i, byte in enumerate(gesture_bytes[:50]):
         recording_gesture[i] = byte
-    recording_flag.value = 1  # Start recording
+    recording_flag.value = 1
     
     # Wait 3 seconds
     print("Recording... ", end='', flush=True)
@@ -114,7 +118,8 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     
     # Stop recording
     recording_flag.value = 0
-    time.sleep(0.5)  # Let final batch flush
+    time.sleep(0.5)
+    
     # Read recorded data
     recorded_data = get_calibration_buffer_from_shared_mem(calib_buffer, calib_index)
     
@@ -122,16 +127,55 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
         print("ERROR: No data was recorded! Check if Myos are connected.")
         return
     
-    # Add to classifier
+    # Get device names from shared memory
+    device_names = []
+    for device_array in device_names_shared:
+        name_bytes = bytes(device_array[:]).split(b'\x00')[0]
+        if name_bytes:
+            device_names.append(name_bytes.decode('utf-8'))
+    
+    if len(device_names) != 2:
+        print(f"WARNING: Expected 2 device names, got {len(device_names)}. Using generic names.")
+        device_names = ['Device0', 'Device1']
+    
+    # Sort device names to match data order
+    device_names = sorted(device_names)
+    
+    # Generate column headers
+    headers = []
+    for device_name in device_names:
+        # EMG channels (8)
+        for i in range(8):
+            headers.append(f"{device_name}_EMG{i}")
+        
+        # IMU data (9)
+        headers.extend([
+            f"{device_name}_Roll",
+            f"{device_name}_Pitch", 
+            f"{device_name}_Yaw",
+            f"{device_name}_AccelX",
+            f"{device_name}_AccelY",
+            f"{device_name}_AccelZ",
+            f"{device_name}_GyroX",
+            f"{device_name}_GyroY",
+            f"{device_name}_GyroZ"
+        ])
+    
+    # Convert to DataFrame
+    import pandas as pd
+    df = pd.DataFrame(recorded_data, columns=headers)
+    
+    # Add to classifier (still uses numpy array)
     classifier.add_calibration_sample(gesture_name, recorded_data)
     
-    # Save to disk
+    # Save to disk as CSV
     import os
     os.makedirs('calibration_data', exist_ok=True)
     timestamp = int(time.time())
-    np.save(f'calibration_data/{gesture_name}_{timestamp}.npy', recorded_data)
+    csv_path = f'calibration_data/{gesture_name}_{timestamp}.csv'
+    df.to_csv(csv_path, index=False)
     
-    print(f"Calibration complete! Saved {len(recorded_data)} samples")
+    print(f"Calibration complete! Saved {len(recorded_data)} samples to {csv_path}")
 
 def Classify(stream_buffer, stream_index, classifier):
     """Called from main process when user wants to classify"""
@@ -180,8 +224,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
         case "cb":  #calibrate
             print("now will run calibrate function")
             gesture_name = input("Which gesture would you like to calibrate? ")
-            Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-                     recording_gesture, classifier)
+            Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,recording_gesture, classifier, device_names_shared)  # ADD device_names_shared
         case _:
             print("Invalid command! Use: train, classify, or calibrate")
 
@@ -206,9 +249,9 @@ if __name__ == "__main__":
     
     # Start data acquisition process
     data_process = Process(
-        target=data_acquisition_process,
-        args=(shm_stream.name, shm_calib.name, stream_index, calib_index, 
-              recording_flag, recording_gesture)
+    target=data_acquisition_process,
+    args=(shm_stream.name, shm_calib.name, stream_index, calib_index, 
+    recording_flag, recording_gesture, device_names_shared)  # ADD THIS
     )
     data_process.daemon = True  # Dies when main process dies
     data_process.start()
@@ -235,8 +278,7 @@ if __name__ == "__main__":
     # Command loop
     try:
         while True:
-            Command(stream_buffer, stream_index, calib_buffer, calib_index,
-                   recording_flag, recording_gesture, classifier)
+            Command(stream_buffer, stream_index, calib_buffer, calib_index,recording_flag, recording_gesture, classifier, device_names_shared)  # ADD THIS
     except KeyboardInterrupt:
         print("\nShutting down...")
         data_process.terminate()

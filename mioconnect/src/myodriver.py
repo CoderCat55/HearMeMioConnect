@@ -246,6 +246,30 @@ class MyoDriver:
                 self._print_status("Connected with id", myo.connection_id)
 
         return handle_connection_status
+    def store_device_names_to_shared(self, device_names_shared):
+        """Store device names to shared memory after connection"""
+        # Wait until we have device names
+        max_wait = 50  # 5 seconds
+        wait_count = 0
+        while wait_count < max_wait:
+            # Check if all myos have device names
+            all_have_names = all(myo.device_name is not None for myo in self.myos)
+            if all_have_names and len(self.myos) >= 2:
+                break
+            time.sleep(0.1)
+            self.receive()
+            wait_count += 1
+        
+        # Store names
+        if len(self.myos) >= 2:
+            device_names = sorted([myo.device_name for myo in self.myos[:2]])
+            for i, name in enumerate(device_names):
+                if name:
+                    name_bytes = name.encode('utf-8')
+                    for j, byte in enumerate(name_bytes):
+                        if j < len(device_names_shared[i]):
+                            device_names_shared[i][j] = byte
+            print(f"✓ Device names stored: {device_names}")
 
     def handle_attribute_value(self, e, payload):
         """

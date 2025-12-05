@@ -9,10 +9,9 @@ This is a real time system.
 Okay so here is what I want to do: 
 Currently it is saving calibration as numpy arrays. I want save these numpy arrays inside a pandas data frame frame with headers like sensor0emg1 etc.  then save data frame as csv. 
 
-Questions 
-what files should be edited?
-How they will be edited?
-What will be the headers how did you find that?
+
+Control this code.
+I have erors in main.py device_names_shared is not defined 
 
 RULES:
 Do not add unrelevant extra things.
