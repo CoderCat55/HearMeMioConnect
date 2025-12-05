@@ -12,6 +12,7 @@ Currently it is saving calibration as numpy arrays. I want save these numpy arra
 Questions 
 what files should be edited?
 How they will be edited?
+What will be the headers how did you find that?
 
 RULES:
 Do not add unrelevant extra things.
