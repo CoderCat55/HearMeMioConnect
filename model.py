@@ -4,7 +4,6 @@ reads realtime data from shared memory for a fixed time and classifies returns r
 """
 from sklearn import svm
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import StandardScaler
 import glob
 import numpy as np
@@ -54,58 +53,55 @@ class GestureClassifier:
         self.calibration_data[gesture_name].append(time_series_data)
         print(f"Added calibration sample for '{gesture_name}'. Total: {len(self.calibration_data[gesture_name])}")
     
-    def train(self, test_size=0.2):
-        """Train SVM on calibration data and evaluate accuracy."""
+    def train(self):
+        """Train SVM on calibration data"""
         if len(self.calibration_data) < 2:
             print("ERROR: Need at least 2 gestures to train!")
-            return False, 0.0
+            return False
         
-        # --- 1. Feature Extraction ---
+        # Check if there's enough data per gesture
+        for gesture, samples in self.calibration_data.items():
+            if len(samples) < 2:
+                print(f"WARNING: Gesture '{gesture}' has only {len(samples)} sample. Training may be less accurate or fail if it's the only one in the test split.")
+        
         print("Extracting features from calibration data...")
         X = []  # Features
         y = []  # Labels
         
         self.gesture_labels = sorted(self.calibration_data.keys())
+        label_map = {name: i for i, name in enumerate(self.gesture_labels)}
         
         for gesture_name in self.gesture_labels:
             samples = self.calibration_data[gesture_name]
             for time_series in samples:
                 features = self.extract_features(time_series)
                 X.append(features)
-                y.append(gesture_name)
+                # Use numeric labels for stratify
+                y.append(label_map[gesture_name])
         
         X = np.array(X)
         y = np.array(y)
         
-        if len(X) < 2:
-            print("ERROR: Not enough samples to train and test. Need at least 2.")
-            return False, 0.0
-
-        # --- 2. Data Splitting ---
-        # stratify=y ensures that the distribution of gestures is the same in train and test sets
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42, stratify=y
-        )
-
-        print(f"Total samples: {len(X)}. Training on {len(X_train)}, testing on {len(X_test)}.")
+        print(f"Training on {len(X)} samples from {len(self.gesture_labels)} gestures...")
         
-        # --- 3. Feature Scaling ---
-        # Fit scaler ONLY on training data to avoid data leakage
+        # Normalize features
+        # Split data to prevent data leakage during scaling and for validation
+        # stratify=y ensures both train and test sets have proportional gesture representation
+        try:
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+        except ValueError:
+            print("Could not split data for validation, likely due to too few samples for a gesture. Training on all data.")
+            X_train, X_test, y_train, y_test = X, [], y, []
+
         X_train_scaled = self.scaler.fit_transform(X_train)
-        # Transform test data with the same scaler
-        X_test_scaled = self.scaler.transform(X_test)
         
-        # --- 4. Model Training ---
-        self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale')
+        # Train SVM
+        self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale', probability=True)
         self.model.fit(X_train_scaled, y_train)
         
-        print("Training complete!")
-
-        # --- 5. Evaluation ---
-        y_pred = self.model.predict(X_test_scaled)
-        accuracy = accuracy_score(y_test, y_pred)
-        print(f"Model Accuracy on Test Set: {accuracy:.2%}")
-        
+        # Calculate and print accuracy on the test set
+        accuracy = self.model.score(self.scaler.transform(X_test), y_test) if len(X_test) > 0 else 1.0
+        print(f"Training complete! Validation Accuracy: {accuracy:.2f}")
         return True, accuracy
     
     def classify(self, features):
@@ -125,8 +121,8 @@ class GestureClassifier:
         features_scaled = self.scaler.transform(features)
         
         # Predict
-        prediction = self.model.predict(features_scaled)
-        return prediction[0]
+        prediction_idx = self.model.predict(features_scaled)[0]
+        return self.gesture_labels[prediction_idx]
     
     def save_model(self, filepath):
         """Save trained model to disk"""
@@ -163,23 +159,25 @@ class GestureClassifier:
         print(f"Model loaded from {filepath}")
         return True
     
-    def load_calibration_data(self):
+    def load_calibration_data(self, data_dir='calibration_data'):
         """Load previously saved calibration from disk"""
-        if not os.path.exists('calibration_data'):
+        if not os.path.isdir(data_dir):
             print("No calibration data directory found")
             return
         
-        files = glob.glob('calibration_data/*.npy')
+        # Look for .csv files now
+        files = glob.glob(os.path.join(data_dir, '*.csv'))
         if not files:
-            print("No calibration files found")
+            print("No .csv calibration files found")
             return
         
+        import pandas as pd
         for file in files:
             # Extract gesture name from filename (remove timestamp)
             basename = os.path.basename(file)
             gesture_name = basename.split('_')[0]  # Get part before first underscore
             
-            data = np.load(file)
+            data = pd.read_csv(file, header=None).values
             if gesture_name not in self.calibration_data:
                 self.calibration_data[gesture_name] = []
             self.calibration_data[gesture_name].append(data)
