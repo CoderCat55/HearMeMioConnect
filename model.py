@@ -158,7 +158,8 @@ class GestureClassifier:
             basename = os.path.splitext(os.path.basename(file))[0]
             gesture_name = basename.rsplit('_', 1)[0]  # Get part before the last underscore
             
-            df = pd.read_csv(file, header=None)
+            # Read the CSV, automatically using the first row as the header
+            df = pd.read_csv(file)
             data = df.to_numpy()
             if gesture_name not in self.calibration_data:
                 self.calibration_data[gesture_name] = []
