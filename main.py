@@ -126,15 +126,15 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     classifier.add_calibration_sample(gesture_name, recorded_data)
     
     # Save to disk
-    import pandas as pd
     import os
+    import pandas as pd
     os.makedirs('calibration_data', exist_ok=True)
     timestamp = int(time.time())
-    # Create a DataFrame and save as CSV without header or index
+    
     df = pd.DataFrame(recorded_data)
     df.to_csv(f'calibration_data/{gesture_name}_{timestamp}.csv', index=False, header=False)
     
-    print(f"Calibration complete! Saved {len(recorded_data)} samples to CSV.")
+    print(f"Calibration complete! Saved {len(recorded_data)} samples")
 
 def Classify(stream_buffer, stream_index, classifier):
     """Called from main process when user wants to classify"""
@@ -163,8 +163,8 @@ def Classify(stream_buffer, stream_index, classifier):
 def Train(classifier):
     """Called from main process when user wants to train"""
     print("Training model...")
-    success, accuracy = classifier.train()
-    if success: # This checks if the first returned value is True
+    success = classifier.train()
+    if success:
         classifier.save_model('model.pkl')
         print("Training complete!")
     else:

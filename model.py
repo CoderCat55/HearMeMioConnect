@@ -3,12 +3,12 @@ trains itself based on calibration samples
 reads realtime data from shared memory for a fixed time and classifies returns result
 """
 from sklearn import svm
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import glob
 import numpy as np
 import pickle
 import os
+import pandas as pd
 
 class GestureClassifier:
     def __init__(self):
@@ -59,25 +59,18 @@ class GestureClassifier:
             print("ERROR: Need at least 2 gestures to train!")
             return False
         
-        # Check if there's enough data per gesture
-        for gesture, samples in self.calibration_data.items():
-            if len(samples) < 2:
-                print(f"WARNING: Gesture '{gesture}' has only {len(samples)} sample. Training may be less accurate or fail if it's the only one in the test split.")
-        
         print("Extracting features from calibration data...")
         X = []  # Features
         y = []  # Labels
         
         self.gesture_labels = sorted(self.calibration_data.keys())
-        label_map = {name: i for i, name in enumerate(self.gesture_labels)}
         
         for gesture_name in self.gesture_labels:
             samples = self.calibration_data[gesture_name]
             for time_series in samples:
                 features = self.extract_features(time_series)
                 X.append(features)
-                # Use numeric labels for stratify
-                y.append(label_map[gesture_name])
+                y.append(gesture_name)
         
         X = np.array(X)
         y = np.array(y)
@@ -85,24 +78,14 @@ class GestureClassifier:
         print(f"Training on {len(X)} samples from {len(self.gesture_labels)} gestures...")
         
         # Normalize features
-        # Split data to prevent data leakage during scaling and for validation
-        # stratify=y ensures both train and test sets have proportional gesture representation
-        try:
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-        except ValueError:
-            print("Could not split data for validation, likely due to too few samples for a gesture. Training on all data.")
-            X_train, X_test, y_train, y_test = X, [], y, []
-
-        X_train_scaled = self.scaler.fit_transform(X_train)
+        X_scaled = self.scaler.fit_transform(X)
         
         # Train SVM
-        self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale', probability=True)
-        self.model.fit(X_train_scaled, y_train)
+        self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale')
+        self.model.fit(X_scaled, y)
         
-        # Calculate and print accuracy on the test set
-        accuracy = self.model.score(self.scaler.transform(X_test), y_test) if len(X_test) > 0 else 1.0
-        print(f"Training complete! Validation Accuracy: {accuracy:.2f}")
-        return True, accuracy
+        print("Training complete!")
+        return True
     
     def classify(self, features):
         """
@@ -121,8 +104,8 @@ class GestureClassifier:
         features_scaled = self.scaler.transform(features)
         
         # Predict
-        prediction_idx = self.model.predict(features_scaled)[0]
-        return self.gesture_labels[prediction_idx]
+        prediction = self.model.predict(features_scaled)
+        return prediction[0]
     
     def save_model(self, filepath):
         """Save trained model to disk"""
@@ -159,25 +142,24 @@ class GestureClassifier:
         print(f"Model loaded from {filepath}")
         return True
     
-    def load_calibration_data(self, data_dir='calibration_data'):
+    def load_calibration_data(self):
         """Load previously saved calibration from disk"""
-        if not os.path.isdir(data_dir):
+        if not os.path.exists('calibration_data'):
             print("No calibration data directory found")
             return
         
-        # Look for .csv files now
-        files = glob.glob(os.path.join(data_dir, '*.csv'))
+        files = glob.glob('calibration_data/*.csv')
         if not files:
-            print("No .csv calibration files found")
+            print("No calibration files found")
             return
         
-        import pandas as pd
         for file in files:
             # Extract gesture name from filename (remove timestamp)
-            basename = os.path.basename(file)
-            gesture_name = basename.split('_')[0]  # Get part before first underscore
+            basename = os.path.splitext(os.path.basename(file))[0]
+            gesture_name = basename.rsplit('_', 1)[0]  # Get part before the last underscore
             
-            data = pd.read_csv(file, header=None).values
+            df = pd.read_csv(file, header=None)
+            data = df.to_numpy()
             if gesture_name not in self.calibration_data:
                 self.calibration_data[gesture_name] = []
             self.calibration_data[gesture_name].append(data)
