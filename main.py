@@ -7,7 +7,7 @@ import time
 
 # Constants
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
-CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
+CALIBRATION_BUFFER_SIZE = 2000  # 10 seconds at 200Hz, allows for longer recordings
 
 def data_acquisition_process(stream_mem_name, calib_mem_name, device_name_1, 
                             device_name_2, stream_index, calib_index, recording_flag, recording_gesture):
@@ -95,29 +95,35 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             return np.concatenate([part1, part2])
         
 def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-              recording_gesture, classifier, device_name_1, device_name_2):
+              recording_gesture, classifier, device_name_1, device_name_2, duration_seconds=3):
     """Called from main process when user wants to calibrate"""
+    if duration_seconds * 200 > CALIBRATION_BUFFER_SIZE:
+        print(f"HATA: İstenen süre ({duration_seconds}s) arabellek boyutunu aşıyor. Lütfen süreyi azaltın veya CALIBRATION_BUFFER_SIZE sabitini artırın.")
+        return
+
     print(f"Calibration will start in ", end='', flush=True)
     for i in range(5, 0, -1):
         print(f"{i}... ", end='', flush=True)
         time.sleep(1)
     print("\n")
-    print(f"Recording calibration for '{gesture_name}' - 3 seconds...")
+    print(f"Recording calibration for '{gesture_name}' - {duration_seconds} seconds...")
     
     # Reset calibration buffer
     calib_index.value = 0
     
     # Set flag in shared memory
     gesture_bytes = gesture_name.encode('utf-8')
-    for i, byte in enumerate(gesture_bytes[:50]):  # Max 50 chars
+    # Clear previous gesture name
+    recording_gesture.value = b'\0' * 50
+    for i, byte in enumerate(gesture_bytes[:49]):  # Max 49 chars + null terminator
         recording_gesture[i] = byte
     recording_flag.value = 1  # Start recording
     
-    # Wait 3 seconds
+    # Wait for the specified duration
     print("Recording... ", end='', flush=True)
-    for i in range(3):
+    for i in range(duration_seconds):
         time.sleep(1)
-        print(f"{3-i}... ", end='', flush=True)
+        print(f"{duration_seconds-1-i}... ", end='', flush=True)
     print("Done!")
     
     # Stop recording
@@ -210,9 +216,14 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             Classify(stream_buffer, stream_index, classifier)
         case "cb":  #calibrate
             print("now will run calibrate function")
-            gesture_name = input("Which gesture would you like to calibrate? ")
+            gesture_name = input("Hangi jesti kalibre etmek istersiniz? ")
+            try:
+                duration_str = input("Kayıt kaç saniye sürsün? (varsayılan: 3): ")
+                duration = int(duration_str) if duration_str else 3
+            except ValueError:
+                duration = 3
             Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-                     recording_gesture, classifier, device_name_1, device_name_2)
+                     recording_gesture, classifier, device_name_1, device_name_2, duration_seconds=duration)
         case _:
             print("Invalid command! Use: train, classify, or calibrate")
 
