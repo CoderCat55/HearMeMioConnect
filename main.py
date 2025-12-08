@@ -33,10 +33,10 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index, cali
         recording_flag=recording_flag,
         recording_gesture=recording_gesture
     )
-    myo_driver.store_device_names_to_shared(device_names_shared)
     # Create shared memory for device names (2 devices, 50 chars each)
     device_names_shared = [mp.Array('c', MAX_DEVICE_NAME_LENGTH), 
                         mp.Array('c', MAX_DEVICE_NAME_LENGTH)]
+    myo_driver.store_device_names_to_shared(device_names_shared)
     
     # Connect to Myos
     myo_driver.run()  # Now returns after connections complete!
