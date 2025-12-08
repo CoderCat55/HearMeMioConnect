@@ -24,14 +24,10 @@ class GestureClassifier:
         Returns: 1D feature vector
         """
         features = []
-        # time_series_data shape: (time_steps, 35) where col 0 is timestamp
-        timestamps = time_series_data[:, 0]  # Extract if needed
-        features_only = time_series_data[:, 1:]  # Shape: (time_steps, 34)
-        
         
         # Extract features from each channel (34 channels total)
-        for channel in range(features_only.shape[1]):  # Now 34 channels
-            channel_data = features_only[:, channel]
+        for channel in range(time_series_data.shape[1]):
+            channel_data = time_series_data[:, channel]
             
             # Statistical features
             features.extend([
