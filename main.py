@@ -45,9 +45,15 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index,
                 print(f"✓ Myo {i}: {myo.device_name} (connection {myo.connection_id})")
     print("Data acquisition process ready!")
     
-    # Run forever - NOW this works correctly
-    while True:
-        myo_driver.receive()
+    # Run forever. This process is a daemon and should ignore KeyboardInterrupts
+    # intended for the main process's command loop.
+    try:
+        while True:
+            myo_driver.receive()
+    except KeyboardInterrupt:
+        # Silently ignore the interrupt and continue. The process will be
+        # terminated when the main process exits.
+        pass
         
 def get_calibration_buffer_from_shared_mem(calib_buffer, calib_index):
     """Read recorded calibration data"""
@@ -160,6 +166,33 @@ def Classify(stream_buffer, stream_index, classifier):
     print(f"Predicted gesture: {result}")
     return result
 
+def LiveClassify(stream_buffer, stream_index, classifier):
+    """Continuously classify gestures in real-time."""
+    if classifier.model is None:
+        print("ERROR: Model not trained yet! Please train the model first using 'tr'.")
+        return
+
+    print("\n>>> Starting LIVE classification... Press Ctrl+C to stop. <<<")
+    try:
+        while True:
+            # Get recent data (last 1 second)
+            current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=1.0)
+
+            if current_data is not None and len(current_data) > 10:
+                # Extract features and classify
+                features = GestureClassifier.extract_features(current_data)
+                result = classifier.classify(features)
+                
+                # Print the result on the same line to create a live feed effect
+                # .ljust(20) adds padding to clear previous, longer gesture names
+                print(f"--> Predicted: {str(result).ljust(20)}", end='\r', flush=True)
+            
+            # Wait a bit before the next classification to avoid spamming
+            time.sleep(0.2) # Classify 5 times per second
+
+    except KeyboardInterrupt:
+        print("\nLive classification stopped.")
+
 def Train(classifier):
     """Called from main process when user wants to train"""
     print("Training model...")
@@ -185,8 +218,11 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             gesture_name = input("Which gesture would you like to calibrate? ")
             Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
                      recording_gesture, classifier)
+        case "live": # live classification
+            print("now will run live classify function")
+            LiveClassify(stream_buffer, stream_index, classifier)
         case _:
-            print("Invalid command! Use: train, classify, or calibrate")
+            print("Invalid command! Use: tr, cf, cb, or live")
 
 if __name__ == "__main__":
     print("=== Gesture Recognition System ===")
@@ -232,7 +268,7 @@ if __name__ == "__main__":
     classifier = GestureClassifier()
     classifier.load_calibration_data()
     
-    print("\nSystem ready! Available commands: tr= train, cf =classify,cb= calibrate")
+    print("\nSystem ready! Available commands: tr=train, cf=classify, cb=calibrate, live=live mode")
     print()
     
     # Command loop

@@ -3,7 +3,11 @@ trains itself based on calibration samples
 reads realtime data from shared memory for a fixed time and classifies returns result
 """
 from sklearn import svm
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+import seaborn as sns
 import glob
 import numpy as np
 import pickle
@@ -56,7 +60,10 @@ class GestureClassifier:
         print(f"Added calibration sample for '{gesture_name}'. Total: {len(self.calibration_data[gesture_name])}")
     
     def train(self):
-        """Train SVM on calibration data"""
+        """
+        Train SVM on calibration data.
+        Splits data to report test accuracy, then retrains on all data.
+        """
         if len(self.calibration_data) < 2:
             print("ERROR: Need at least 2 gestures to train!")
             return False
@@ -77,14 +84,51 @@ class GestureClassifier:
         X = np.array(X)
         y = np.array(y)
         
-        print(f"Training on {len(X)} samples from {len(self.gesture_labels)} gestures...")
+        if len(X) < 2:
+            print("ERROR: Not enough samples to train.")
+            return False
         
-        # Normalize features
-        X_scaled = self.scaler.fit_transform(X)
+        print(f"Total samples: {len(X)} from {len(self.gesture_labels)} gestures.")
+
+        # Split data for accuracy testing. Use stratify for balanced splits.
+        # test_size'ı veriniz çok küçükse (örneğin 10'dan az) daha küçük bir değere ayarlayabilir veya
+        # yeterli veri yoksa bu adımı atlayabilirsiniz.
+        try:
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+        except ValueError:
+            print("Not enough samples to create a test split. Training on all data without accuracy report.")
+            X_train, y_train = X, y
+            X_test, y_test = None, None
+
+        # Scale data: Fit ONLY on training data, then transform both train and test data.
+        X_train_scaled = self.scaler.fit_transform(X_train)
         
-        # Train SVM
+        # Train SVM on the training split
         self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale')
-        self.model.fit(X_scaled, y)
+        self.model.fit(X_train_scaled, y_train)
+        
+        # Report accuracy on the test split if it exists
+        if X_test is not None:
+            X_test_scaled = self.scaler.transform(X_test)
+            y_pred = self.model.predict(X_test_scaled)
+            accuracy = accuracy_score(y_test, y_pred)
+            print(f"Model Test Accuracy: {accuracy:.2%}")
+
+            # Generate and display the confusion matrix
+            print("Generating confusion matrix...")
+            cm = confusion_matrix(y_test, y_pred, labels=self.gesture_labels)
+            plt.figure(figsize=(10, 7))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                        xticklabels=self.gesture_labels, yticklabels=self.gesture_labels)
+            plt.xlabel('Predicted Label')
+            plt.ylabel('True Label')
+            plt.title('Confusion Matrix')
+            plt.show()
+
+        # Final step: Retrain on ALL data to make the final model as robust as possible
+        print("Retraining model on all available data...")
+        X_scaled_full = self.scaler.fit_transform(X)
+        self.model.fit(X_scaled_full, y)
         
         print("Training complete!")
         return True
@@ -161,6 +205,7 @@ class GestureClassifier:
             gesture_name = basename.split('_')[0]  # Get part before first underscore
             
             data = np.load(file)
+
             if gesture_name not in self.calibration_data:
                 self.calibration_data[gesture_name] = []
             
