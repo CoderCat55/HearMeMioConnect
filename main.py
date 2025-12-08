@@ -17,10 +17,14 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index,
     
     # Attach to shared memory
     shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
-    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
+    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 35), dtype=np.float32, buffer=shm_stream.buf)
     
     shm_calib = shared_memory.SharedMemory(name=calib_mem_name)
+<<<<<<< HEAD
     calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 35), dtype=np.float64, buffer=shm_calib.buf)
+=======
+    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 35), dtype=np.float32, buffer=shm_calib.buf)
+>>>>>>> d8324ec35394c2db67c3ea2d0b6149ab080394a6
     
     # Initialize MyoDriver with ALL parameters
     config = Config()
