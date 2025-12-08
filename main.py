@@ -4,7 +4,7 @@ from multiprocessing import Process, shared_memory
 import numpy as np
 from model import GestureClassifier
 import time
-
+ 
 # Constants
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
 CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
@@ -20,7 +20,7 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index,
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
     
     shm_calib = shared_memory.SharedMemory(name=calib_mem_name)
-    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_calib.buf)
+    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 35), dtype=np.float64, buffer=shm_calib.buf)
     
     # Initialize MyoDriver with ALL parameters
     config = Config()
@@ -128,10 +128,13 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     # Save to disk
     import os
     os.makedirs('calibration_data', exist_ok=True)
-    timestamp = int(time.time())
-    np.save(f'calibration_data/{gesture_name}_{timestamp}.npy', recorded_data)
     
-    print(f"Calibration complete! Saved {len(recorded_data)} samples")
+    # Veri zaten zaman damgasını içeriyor (ilk sütun).
+    # Bu yüzden doğrudan kaydedebiliriz.
+    data_to_save = recorded_data
+    filename = f'calibration_data/{gesture_name}_{int(time.time())}.npy'
+    np.save(filename, data_to_save)
+    print(f"Calibration complete! Saved {len(data_to_save)} samples to '{filename}'")
 
 def Classify(stream_buffer, stream_index, classifier):
     """Called from main process when user wants to classify"""
@@ -194,8 +197,8 @@ if __name__ == "__main__":
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
     stream_buffer.fill(0)  # Initialize to zero
     
-    shm_calib = shared_memory.SharedMemory(create=True, size=CALIBRATION_BUFFER_SIZE*34*4)
-    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_calib.buf)
+    shm_calib = shared_memory.SharedMemory(create=True, size=CALIBRATION_BUFFER_SIZE * 35 * 8) # 35 columns, float64 (8 bytes)
+    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 35), dtype=np.float64, buffer=shm_calib.buf)
     calib_buffer.fill(0)
     
     # Create shared indices and flags

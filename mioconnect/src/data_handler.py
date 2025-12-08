@@ -10,6 +10,9 @@ class DataHandler:
         self.printEmg = config.PRINT_EMG
         self.printImu = config.PRINT_IMU
 
+        # Store the start time to calculate relative timestamps
+        self.start_time = time.time()
+
         # Store reference to myo_driver to get device names
         self.myo_driver = myo_driver
         
@@ -45,7 +48,7 @@ class DataHandler:
         sample1 = struct.unpack('<8b', payload['value'][0:8])   # First sample
         sample2 = struct.unpack('<8b', payload['value'][8:16])  # Second sample
         
-        timestamp = time.time()
+        timestamp = time.time() - self.start_time
         
         # Process only first sample
         self._process_single_emg_sample(sample1, device_name, timestamp)
@@ -85,7 +88,7 @@ class DataHandler:
         gyro_data = payload['value'][14:20]
         gx, gy, gz = struct.unpack('hhh', gyro_data)
         
-        timestamp = time.time()
+        timestamp = time.time() - self.start_time
         
         # Initialize array for this device if not exists
         if device_name not in self.device_data:
@@ -141,7 +144,9 @@ class DataHandler:
             # Also write to calibration buffer if recording
             if self.recording_flag.value == 1:
                 if self.calib_index.value < len(self.calib_buffer):
-                    self.calib_buffer[self.calib_index.value] = sample
+                    # Combine timestamp (col 0) and sample data (cols 1-35)
+                    combined_row = np.concatenate(([timestamp], sample))
+                    self.calib_buffer[self.calib_index.value] = combined_row
                     self.calib_index.value += 1
                 elif self.calib_index.value == len(self.calib_buffer):
                     # Print once when buffer full
