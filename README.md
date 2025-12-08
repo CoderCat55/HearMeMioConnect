@@ -27,5 +27,10 @@ While giving ansswers include the chain of thought, why did you make that assump
 
 Your aim is to discuss the structure with me. I need you to be objective. You should use strategies like listing pros and cons of a situation and judge it according to my aim.
 
+Aim of repository:
+Making necessary changes for this system to work on KNN istead of SVM. k=3 
 
-
+Steps:
+Understand what this program does detailly
+How can we change it to classify with KNN?
+I want to minimally change so do not recommend unnecessary things.
