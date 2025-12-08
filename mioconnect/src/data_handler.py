@@ -135,13 +135,16 @@ class DataHandler:
         # Write to streaming buffer (circular)
         for timestamp, sample in self.local_buffer:
             idx = self.stream_index.value % len(self.stream_buffer)
-            self.stream_buffer[idx] = sample
+            # Create row with timestamp in column 0
+            self.stream_buffer[idx, 0] = timestamp
+            self.stream_buffer[idx, 1:] = sample  # Features in columns 1-35
             self.stream_index.value += 1
             
             # Also write to calibration buffer if recording
             if self.recording_flag.value == 1:
                 if self.calib_index.value < len(self.calib_buffer):
-                    self.calib_buffer[self.calib_index.value] = sample
+                    self.calib_buffer[self.calib_index.value, 0] = timestamp
+                    self.calib_buffer[self.calib_index.value, 1:] = sample
                     self.calib_index.value += 1
                 elif self.calib_index.value == len(self.calib_buffer):
                     # Print once when buffer full
