@@ -2,7 +2,7 @@
 trains itself based on calibration samples
 reads realtime data from shared memory for a fixed time and classifies returns result
 """
-from sklearn import svm
+from sklearn.neighbors import KNeighborsClassifier  # Replace svm import
 from sklearn.preprocessing import StandardScaler
 import glob
 import numpy as np
@@ -79,8 +79,7 @@ class GestureClassifier:
         # Normalize features
         X_scaled = self.scaler.fit_transform(X)
         
-        # Train SVM
-        self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale')
+        self.model = KNeighborsClassifier(n_neighbors=3, weights='uniform', metric='euclidean')
         self.model.fit(X_scaled, y)
         
         print("Training complete!")
