@@ -143,7 +143,7 @@ def Classify(stream_buffer, stream_index, classifier):
     print("Classifying gesture...")
     
     # Read current data from shared memory (last 1 second)
-    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=1.0)
+    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=3.0)
     
     if current_data is None or len(current_data) < 10:
         print("ERROR: Not enough data to classify!")
