@@ -14,31 +14,6 @@ Also I need to save data (calibration) for gestures for 3 seconds. Since I will 
 Also we need to get data not using connection id we need to get data with device name)]
 
 
-Solution 4: Match Window Sizes
-Option A: Use same duration for both (RECOMMENDED)
-python
-# main.py
-CALIBRATION_DURATION = 3.0  # seconds
-CLASSIFICATION_DURATION = 3.0  # same!
-Issue 5: Window Size Mismatch
-
-Calibration: 3 seconds of data (~300 samples at 100Hz)
-
-Classification: 1 second of data (~100 samples)
-
-Model extracts: Statistical features (mean, std, min, max, range)
-
-Problem: Statistical features from 3-second windows will have completely different distributions than 1-second windows!
-
-Example:
-
-3-second gesture: Mean EMG = 50, Std = 20
-
-Same gesture, 1-second window: Mean EMG = 70, Std = 35
-
-Model trained on 3s data cannot recognize 1s patterns!
-
-
 Q2: "Do I need to perform the gesture before classifying it?"
 Answer: With your current code: NO, but you SHOULD!
 Current behavior:
@@ -54,7 +29,7 @@ Papers recommend: Use motion detection to segment gestures automatically!
 ///////for this 
 delay 5sn 
 classify function çağrıldı . classify fucntionu 3sn beklicek sonra shared memoryden alıcak 
-
+----------------------------------------------------------------------------------------------------------------
 Issue 3: Timestamp Column Mismatch 🔴 CRITICAL
 Chain of thought:
 Looking at data_handler.py line 156:
@@ -127,7 +102,7 @@ def extract_features(time_series_data):
 I recommend Solution 2 because timestamp shouldn't be used as a feature anyway!
 //so ı just need timestamps for debugging right model wont be using them?
 //aslında Türklerin çalışması bize çok yol gösterici olucak çünkü onlarda gesture based olarak yapmışlar sınıflandırmayı zamana bağlı değil de.
-
+---------------------------------------------------------------------------------------------------------------------
 what I want to do:
 1- add a timestamp column inside numpy array instead of as a filename. Because we need to see which data we get based on timestamps
 
