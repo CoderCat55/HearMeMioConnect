@@ -151,14 +151,8 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
 
 def Classify(stream_buffer, stream_index, classifier):
     """Called from main process when user wants to classify"""
-    print(f"Classify will start in ", end='', flush=True)
-    for i in range(CLASSIFICATION_STARTS, 0, -1):
-        print(f"{i}... ", end='', flush=True)
-        time.sleep(1)
-    print("\n")
-    print("Classifying gesture...")
-    
     # Read current data from shared memory (last 1 second)
+    time.sleep(CLASSIFICATION_DURATION)
     current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
     
     if current_data is None or len(current_data) < 10:
@@ -206,6 +200,12 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             Train(classifier)
         case "cf": # classify <3
             print("now will run classify function")
+            print(f"Classify will start in ", end='', flush=True)
+            for i in range(CLASSIFICATION_STARTS, 0, -1):
+                print(f"{i}... ", end='', flush=True)
+                time.sleep(1)
+            print("\n")
+            print("Classifying gesture...")
             Classify(stream_buffer, stream_index, classifier)
         case "cb":  #calibrate
             print("now will run calibrate function")
@@ -214,6 +214,12 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
                      recording_gesture, classifier)
         case "live": # live classification
             print("now will run live classify function")
+            print(f"Classify will start in ", end='', flush=True)
+            for i in range(CLASSIFICATION_STARTS, 0, -1):
+                print(f"{i}... ", end='', flush=True)
+                time.sleep(1)
+            print("\n")
+            print("Classifying gesture...")
             LiveClassify()
         case _:
             print("Invalid command! Use: tr, cf, cb, or live")
