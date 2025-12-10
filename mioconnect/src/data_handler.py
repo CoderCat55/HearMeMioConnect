@@ -48,12 +48,10 @@ class DataHandler:
         sample1 = struct.unpack('<8b', payload['value'][0:8])   # First sample
         sample2 = struct.unpack('<8b', payload['value'][8:16])  # Second sample
         
-        timestamp = time.time() - self.start_time
-        
         # Process only first sample
-        self._process_single_emg_sample(sample1, device_name, timestamp)
+        self._process_single_emg_sample(sample1, device_name)
     
-    def _process_single_emg_sample(self, emg_data, device_name, timestamp):
+    def _process_single_emg_sample(self, emg_data, device_name):
         """Process a single EMG sample (8 channels)"""
         # Initialize array for this device if not exists
         if device_name not in self.device_data:
@@ -88,8 +86,6 @@ class DataHandler:
         gyro_data = payload['value'][14:20]
         gx, gy, gz = struct.unpack('hhh', gyro_data)
         
-        timestamp = time.time() - self.start_time
-        
         # Initialize array for this device if not exists
         if device_name not in self.device_data:
             self.device_data[device_name] = np.zeros(17, dtype=np.float32)
@@ -103,9 +99,9 @@ class DataHandler:
         
         # Write combined sample only if we have data from 2 devices
         if len(self.device_data) >= 2:
-            self._write_combined_sample(timestamp)
+            self._write_combined_sample()
 
-    def _write_combined_sample(self, timestamp):
+    def _write_combined_sample(self):
         """Combine data from both Myos and write to shared memory"""
         if self.stream_buffer is None:
             return
@@ -124,7 +120,7 @@ class DataHandler:
         ])
         
         # Accumulate in local buffer
-        self.local_buffer.append((timestamp, combined))
+        self.local_buffer.append(combined)
         
         # Write in batches
         if len(self.local_buffer) >= self.BATCH_SIZE:
@@ -136,7 +132,7 @@ class DataHandler:
             return
         
         # Write to streaming buffer (circular)
-        for timestamp, sample in self.local_buffer:
+        for sample in self.local_buffer:
             idx = self.stream_index.value % len(self.stream_buffer)
             self.stream_buffer[idx] = sample
             self.stream_index.value += 1
@@ -144,9 +140,7 @@ class DataHandler:
             # Also write to calibration buffer if recording
             if self.recording_flag.value == 1:
                 if self.calib_index.value < len(self.calib_buffer):
-                    # Combine timestamp (col 0) and sample data (cols 1-35)
-                    combined_row = np.concatenate(([timestamp], sample))
-                    self.calib_buffer[self.calib_index.value] = combined_row
+                    self.calib_buffer[self.calib_index.value] = sample
                     self.calib_index.value += 1
                 elif self.calib_index.value == len(self.calib_buffer):
                     # Print once when buffer full

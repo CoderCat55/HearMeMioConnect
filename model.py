@@ -47,16 +47,13 @@ class GestureClassifier:
     
     def add_calibration_sample(self, gesture_name, time_series_data):
         """
-        Add a new calibration sample
-        time_series_data shape: (time_steps, 35) - includes timestamp
+        Add a new calibration sample.
+        time_series_data shape: (time_steps, 34)
         """
         if gesture_name not in self.calibration_data:
             self.calibration_data[gesture_name] = []
-        
-        # Exclude the timestamp column (column 0) before adding
-        sensor_data = time_series_data[:, 1:]
-        
-        self.calibration_data[gesture_name].append(sensor_data)
+
+        self.calibration_data[gesture_name].append(time_series_data)
         print(f"Added calibration sample for '{gesture_name}'. Total: {len(self.calibration_data[gesture_name])}")
     
     def train(self):
@@ -209,8 +206,6 @@ class GestureClassifier:
             if gesture_name not in self.calibration_data:
                 self.calibration_data[gesture_name] = []
             
-            # Exclude the timestamp column (column 0) before adding
-            sensor_data = data[:, 1:]
-            self.calibration_data[gesture_name].append(sensor_data)
+            self.calibration_data[gesture_name].append(data)
         
         print(f"Loaded calibration data for {len(self.calibration_data)} gestures")

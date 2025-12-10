@@ -24,10 +24,10 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index,
     
     # Attach to shared memory
     shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
-    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 35), dtype=np.float32, buffer=shm_stream.buf)
+    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
     
     shm_calib = shared_memory.SharedMemory(name=calib_mem_name)
-    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 35), dtype=np.float64, buffer=shm_calib.buf)
+    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 34), dtype=np.float64, buffer=shm_calib.buf)
     
     # Initialize MyoDriver with ALL parameters
     config = Config()
@@ -103,7 +103,7 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
               recording_gesture, classifier):
     """Called from main process when user wants to calibrate"""
     print(f"Calibration will start in ", end='', flush=True)
-    for i in range(CALIBRATION_STARTS, 0, -1):
+    for i in range(int(CALIBRATION_STARTS), 0, -1):
         print(f"{i}... ", end='', flush=True)
         time.sleep(1)
     print("\n")
@@ -120,9 +120,9 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     
     # Wait 3 seconds
     print("Recording... ", end='', flush=True)
-    for i in range(CALIBRATION_DURATION):
+    for i in range(int(CALIBRATION_DURATION)):
         time.sleep(1)
-        print(f"{CALIBRATION_DURATION-i}... ", end='', flush=True)
+        print(f"{int(CALIBRATION_DURATION)-i}... ", end='', flush=True)
     print("Done!")
     
     # Stop recording
@@ -142,8 +142,7 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     import os
     os.makedirs('calibration_data', exist_ok=True)
     
-    # Veri zaten zaman damgasını içeriyor (ilk sütun).
-    # Bu yüzden doğrudan kaydedebiliriz.
+    # Veri artık zaman damgası içermiyor, doğrudan kaydedebiliriz.
     data_to_save = recorded_data
     filename = f'calibration_data/{gesture_name}_{int(time.time())}.npy'
     np.save(filename, data_to_save)
@@ -160,7 +159,7 @@ def Classify(stream_buffer, stream_index, classifier):
         return None
     
     # Extract features
-    features = GestureClassifier.extract_features(current_data)
+    features = classifier.extract_features(current_data)
     
     # Classify
     result = classifier.classify(features)
@@ -201,7 +200,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
         case "cf": # classify <3
             print("now will run classify function")
             print(f"Classify will start in ", end='', flush=True)
-            for i in range(CLASSIFICATION_STARTS, 0, -1):
+            for i in range(int(CLASSIFICATION_STARTS), 0, -1):
                 print(f"{i}... ", end='', flush=True)
                 time.sleep(1)
             print("\n")
@@ -215,7 +214,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
         case "live": # live classification
             print("now will run live classify function")
             print(f"Classify will start in ", end='', flush=True)
-            for i in range(CLASSIFICATION_STARTS, 0, -1):
+            for i in range(int(CLASSIFICATION_STARTS), 0, -1):
                 print(f"{i}... ", end='', flush=True)
                 time.sleep(1)
             print("\n")
@@ -229,12 +228,12 @@ if __name__ == "__main__":
     print("Initializing...")
     
     # Create shared memory buffers
-    shm_stream = shared_memory.SharedMemory(create=True, size=STREAM_BUFFER_SIZE*35*4)
-    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 35), dtype=np.float32, buffer=shm_stream.buf)
+    shm_stream = shared_memory.SharedMemory(create=True, size=STREAM_BUFFER_SIZE * 34 * 4) # 34 columns, float32 (4 bytes)
+    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
     stream_buffer.fill(0)  # Initialize to zero
     
-    shm_calib = shared_memory.SharedMemory(create=True, size=CALIBRATION_BUFFER_SIZE * 35 * 8) # 35 columns, float64 (8 bytes)
-    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 35), dtype=np.float64, buffer=shm_calib.buf)
+    shm_calib = shared_memory.SharedMemory(create=True, size=CALIBRATION_BUFFER_SIZE * 34 * 8) # 34 columns, float64 (8 bytes)
+    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 34), dtype=np.float64, buffer=shm_calib.buf)
     calib_buffer.fill(0)
     
     # Create shared indices and flags
