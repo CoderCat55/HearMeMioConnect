@@ -9,6 +9,13 @@ import time
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
 CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
 
+CALIBRATION_DURATION = 3.0  # seconds
+CLASSIFICATION_DURATION = 3.0  # same!
+
+CALIBRATION_STARTS = 5.0
+CLASSIFICATION_STARTS = 5.0
+
+
 def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index, 
                             calib_index, recording_flag, recording_gesture):
     """Process 1: Continuously acquires data from Myo armbands"""
@@ -17,7 +24,7 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index,
     
     # Attach to shared memory
     shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
-    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
+    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 35), dtype=np.float32, buffer=shm_stream.buf)
     
     shm_calib = shared_memory.SharedMemory(name=calib_mem_name)
     calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 35), dtype=np.float64, buffer=shm_calib.buf)
@@ -63,7 +70,7 @@ def get_calibration_buffer_from_shared_mem(calib_buffer, calib_index):
         return None
     return calib_buffer[:num_samples].copy()
 
-def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=1.0):
+def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION):
     """Read the last N seconds from the streaming buffer"""
     # Calculate how many samples we need
     samples_per_second = 100  # Approximate (depends on actual rate)
@@ -96,11 +103,11 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
               recording_gesture, classifier):
     """Called from main process when user wants to calibrate"""
     print(f"Calibration will start in ", end='', flush=True)
-    for i in range(5, 0, -1):
+    for i in range(CALIBRATION_STARTS, 0, -1):
         print(f"{i}... ", end='', flush=True)
         time.sleep(1)
     print("\n")
-    print(f"Recording calibration for '{gesture_name}' - 3 seconds...")
+    print(f"Recording calibration for '{gesture_name}' - '{CALIBRATION_DURATION} seconds...")
     
     # Reset calibration buffer
     calib_index.value = 0
@@ -113,9 +120,9 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     
     # Wait 3 seconds
     print("Recording... ", end='', flush=True)
-    for i in range(3):
+    for i in range(CALIBRATION_DURATION):
         time.sleep(1)
-        print(f"{3-i}... ", end='', flush=True)
+        print(f"{CALIBRATION_DURATION-i}... ", end='', flush=True)
     print("Done!")
     
     # Stop recording
@@ -145,14 +152,14 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
 def Classify(stream_buffer, stream_index, classifier):
     """Called from main process when user wants to classify"""
     print(f"Classify will start in ", end='', flush=True)
-    for i in range(5, 0, -1):
+    for i in range(CLASSIFICATION_STARTS, 0, -1):
         print(f"{i}... ", end='', flush=True)
         time.sleep(1)
     print("\n")
     print("Classifying gesture...")
     
     # Read current data from shared memory (last 1 second)
-    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=1.0)
+    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
     
     if current_data is None or len(current_data) < 10:
         print("ERROR: Not enough data to classify!")
@@ -172,26 +179,12 @@ def LiveClassify(stream_buffer, stream_index, classifier):
         print("ERROR: Model not trained yet! Please train the model first using 'tr'.")
         return
 
-    print("\n>>> Starting LIVE classification... Press Ctrl+C to stop. <<<")
-    try:
-        while True:
-            # Get recent data (last 1 second)
-            current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=1.0)
+    print("\n>>> Starting LIVE classification... classify fo 20 times <<<")
+    for i in range(1,20,1):
+        Classify(stream_buffer, stream_index, classifier)
+        print("waiting1 sec for other classification")
+        time.sleep(1)
 
-            if current_data is not None and len(current_data) > 10:
-                # Extract features and classify
-                features = GestureClassifier.extract_features(current_data)
-                result = classifier.classify(features)
-                
-                # Print the result on the same line to create a live feed effect
-                # .ljust(20) adds padding to clear previous, longer gesture names
-                print(f"--> Predicted: {str(result).ljust(20)}", end='\r', flush=True)
-            
-            # Wait a bit before the next classification to avoid spamming
-            time.sleep(0.2) # Classify 5 times per second
-
-    except KeyboardInterrupt:
-        print("\nLive classification stopped.")
 
 def Train(classifier):
     """Called from main process when user wants to train"""
@@ -220,7 +213,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
                      recording_gesture, classifier)
         case "live": # live classification
             print("now will run live classify function")
-            LiveClassify(stream_buffer, stream_index, classifier)
+            LiveClassify()
         case _:
             print("Invalid command! Use: tr, cf, cb, or live")
 
@@ -229,8 +222,8 @@ if __name__ == "__main__":
     print("Initializing...")
     
     # Create shared memory buffers
-    shm_stream = shared_memory.SharedMemory(create=True, size=STREAM_BUFFER_SIZE*34*4)
-    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
+    shm_stream = shared_memory.SharedMemory(create=True, size=STREAM_BUFFER_SIZE*35*4)
+    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 35), dtype=np.float32, buffer=shm_stream.buf)
     stream_buffer.fill(0)  # Initialize to zero
     
     shm_calib = shared_memory.SharedMemory(create=True, size=CALIBRATION_BUFFER_SIZE * 35 * 8) # 35 columns, float64 (8 bytes)
