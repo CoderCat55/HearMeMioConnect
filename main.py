@@ -173,7 +173,7 @@ def Classify(stream_buffer, stream_index, classifier):
     print(f"Predicted gesture: {result}")
     return result
 
-def LiveClassify(stream_buffer, stream_index, classifier):
+def LiveClassify():
     """Continuously classify gestures in real-time."""
     if classifier.model is None:
         print("ERROR: Model not trained yet! Please train the model first using 'tr'.")
@@ -181,6 +181,7 @@ def LiveClassify(stream_buffer, stream_index, classifier):
 
     print("\n>>> Starting LIVE classification... classify fo 20 times <<<")
     for i in range(1,20,1):
+        print(f"\nClassification {i}/20:")
         Classify(stream_buffer, stream_index, classifier)
         print("waiting1 sec for other classification")
         time.sleep(1)
