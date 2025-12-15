@@ -169,7 +169,7 @@ def LiveClassify():
         print(f"\nClassification {i}/20:")
         Classify(stream_buffer, stream_index, classifier)
         print("waiting1 sec for other classification")
-        time.sleep(1)
+        time.sleep(CLASSIFICATION_DURATION)
 
 def Train(classifier):
     """Called from main process when user wants to train"""
@@ -207,7 +207,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             print(f"Classify will start in ", end='', flush=True)
             for i in range(CLASSIFICATION_STARTS, 0, -1):
                 print(f"{i}... ", end='', flush=True)
-                time.sleep(CLASSIFICATION_DURATION)
+                time.sleep(1)
             print("\n")
             print("Classifying gesture...")
             LiveClassify()
