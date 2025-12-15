@@ -124,8 +124,19 @@ class GestureSystem:
         
         print("System initialized!")
     
-    def start_data_acquisition(self):
+
+    def start_data_acquisition(self):  
         """Start the data acquisition process (called from /connect endpoint)"""
+        """burası güncellenmeli düzgün yapmıyor işini, eski koddaki halini alıp bir daha deneyelim çünkü 
+        Starting data acquisition process...
+        Waiting for Myo connections...
+        Detecting available ports
+        Port detected:  /dev/ttyACM1
+
+        *** Connecting myo 1 out of 2 ***
+
+        Data acquisition process started successfully!
+"""  
         if self.data_process is not None and self.data_process.is_alive():
             print("Data acquisition already running!")
             return False
