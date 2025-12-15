@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # --- Configuration ---
-DATA_DIRECTORY = r"MyoParticipantOfflineML\Myonewdata" # Path to the folder with gesture data
+DATA_DIRECTORY = r"calibration_data" # Path to the folder with gesture data
 
 # These must match the values in trainmodel.py
 WINDOW_SIZE = 200
@@ -31,6 +31,7 @@ class GestureClassifier:
         self.scaler = None
         self.gesture_map = None
         self.label_to_gesture = None # For converting model output (int) to gesture name (str)
+        self.loaded_model_name = "None"
 
     @staticmethod
     def extract_features(data, window_size=WINDOW_SIZE, window_step=WINDOW_STEP):
@@ -89,15 +90,16 @@ class GestureClassifier:
             print("--- Training Failed: Could not load data. ---")
             return False
 
-        # 2. Feature Scaling
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        print("Features have been scaled.")
-        
         print("\n--- Splitting data into training and testing sets (75/25) ---")
         X_train, X_test, y_train, y_test = train_test_split(
-            X_scaled, y, test_size=0.25, random_state=42, stratify=y
+            X, y, test_size=0.25, random_state=42, stratify=y
         )
+
+        # 2. Feature Scaling (Fit on training data ONLY to prevent data leakage)
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train)
+        X_test = scaler.transform(X_test) # Use the same scaler to transform test data
+        print("Features have been scaled based on the training set.")
         print(f"Training set size: {X_train.shape[0]} samples")
         print(f"Testing set size: {X_test.shape[0]} samples")
 
@@ -108,14 +110,13 @@ class GestureClassifier:
             "K-Nearest Neighbors": KNeighborsClassifier(n_jobs=-1),
             "Support Vector Machine": SVC(random_state=42),
             "Random Forest": RandomForestClassifier(random_state=42, n_jobs=-1),
-            "Gradient Boosting": GradientBoostingClassifier(random_state=42)
         }
         results = {}
 
         print("\n--- Evaluating Models on the Test Set ---")
         for model_name, model in models.items():
             print(f"\nTraining {model_name}...")
-            model.fit(X_train, y_train)
+            model.fit(X_train, y_train) # X_train is already scaled
             y_pred = model.predict(X_test)
             accuracy = accuracy_score(y_test, y_pred)
             results[model_name] = accuracy
@@ -134,7 +135,7 @@ class GestureClassifier:
         best_model_instance = models[best_model_name]
         
         print(f"\n--- Detailed Report for Best Model: {best_model_name} ---")
-        best_model_instance.fit(X_train, y_train)
+        # The model is already trained from the evaluation loop, no need to fit again.
         y_pred_best = best_model_instance.predict(X_test)
         
         label_to_gesture_map = {v: k for k, v in gesture_map.items()}
@@ -157,32 +158,36 @@ class GestureClassifier:
         plt.savefig('confusion_matrix.png')
         print("Confusion matrix saved to 'confusion_matrix.png'")
 
-        # 5. Train the final, best model on the ENTIRE dataset
-        print(f"\nTraining the final '{best_model_name}' model on the entire dataset...")
-        final_model = models[best_model_name]
-        final_model.fit(X_scaled, y)
-        print("Final model training complete.")
+        # 5. Train all models on the ENTIRE dataset and save them
+        print("\n--- Training all models on the entire dataset for saving ---")
+        for model_name, model in models.items():
+            print(f"Training final '{model_name}' model...")
+            X_full_scaled = scaler.fit_transform(X) # Re-fit scaler on all data for production model
+            model.fit(X_full_scaled, y)
+            # Sanitize model name for filename
+            safe_model_name = model_name.lower().replace(' ', '_')
+            model_path = f'model_{safe_model_name}.pkl'
+            print(f"  -> Saving to {model_path}")
+            joblib.dump(model, model_path)
 
-        # 6. Save the model, scaler, and gesture map
-        model_path = 'gesture_model.pkl'
+        # 6. Save the scaler and gesture map (they are common for all models)
         scaler_path = 'scaler.pkl'
         map_path = 'gesture_map.json'
 
-        print(f"\nSaving best model ('{best_model_name}') to {model_path}...")
-        joblib.dump(final_model, model_path)
-
-        print(f"Saving scaler to {scaler_path}...")
+        print(f"\nSaving scaler to {scaler_path}...")
         joblib.dump(scaler, scaler_path)
 
         print(f"Saving gesture map to {map_path}...")
         with open(map_path, 'w') as f:
             json.dump(gesture_map, f, indent=4)
 
-        print("\n--- Training and saving complete! ---")
+        print("\n--- All models, scaler, and map have been saved. ---")
         
-        # 7. Load the newly trained model into this instance
+        # 7. Load the best model into this instance for immediate use
         print("Loading newly trained model for immediate use...")
-        return self.load_model(model_path, scaler_path, map_path)
+        best_model_safe_name = best_model_name.lower().replace(' ', '_')
+        best_model_path = f'model_{best_model_safe_name}.pkl'
+        return self.load_model(best_model_path, scaler_path, map_path)
 
     def _load_data_from_folders(self, base_path, window_size, window_step):
         """
@@ -191,43 +196,25 @@ class GestureClassifier:
         all_features = []
         all_labels = []
         gesture_to_label_map = {}
-        label_counter = 0
 
         if not os.path.isdir(base_path):
             print(f"Error: Data directory not found at '{base_path}'")
             return None, None, None
 
-        participant_folders = sorted([d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))])
-        if not participant_folders:
-            print(f"Error: No participant subdirectories found in '{base_path}'")
-            return None, None, None
+        # Check for participant subdirectories (e.g., p1, p2)
+        subdirs = [d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
+        
+        if subdirs:
+            # Structure: base_path/participant_id/gesture_timestamp.npy
+            print(f"Found participant subdirectories: {subdirs}")
+            search_paths = [os.path.join(base_path, d) for d in subdirs]
+        else:
+            # Structure: base_path/gesture_timestamp.npy (flat structure)
+            print("No participant subdirectories found. Reading from base directory.")
+            search_paths = [base_path]
 
-        print(f"Found participants: {participant_folders}")
-        for participant_id in participant_folders:
-            participant_path = os.path.join(base_path, participant_id)
-            files = [f for f in os.listdir(participant_path) if f.lower().endswith('.npy')]
-            if not files:
-                continue
-
-            for file_name in sorted(files):
-                file_path = os.path.join(participant_path, file_name)
-                try:
-                    gesture_name = file_name.split('_')[0]
-                    if gesture_name not in gesture_to_label_map:
-                        gesture_to_label_map[gesture_name] = label_counter
-                        print(f"  - Found new gesture: '{gesture_name}'. Assigning label: {label_counter}")
-                        label_counter += 1
-                    
-                    label = gesture_to_label_map[gesture_name]
-                    data = np.load(file_path)
-                    
-                    if data.size > 0:
-                        extracted_features = self.extract_features(data, window_size, window_step)
-                        if extracted_features.shape[0] > 0:
-                            all_features.append(extracted_features)
-                            all_labels.append(np.full(extracted_features.shape[0], label))
-                except Exception as e:
-                    print(f"  - Could not read {file_name}: {e}")
+        for path in search_paths:
+            self._process_files_in_path(path, gesture_to_label_map, all_features, all_labels, window_size, window_step)
 
         if not all_features:
             print("\nError: Failed to load any data.")
@@ -236,6 +223,28 @@ class GestureClassifier:
         X = np.vstack(all_features)
         y = np.concatenate(all_labels)
         return X, y, gesture_to_label_map
+
+    def _process_files_in_path(self, path, gesture_map, all_features, all_labels, window_size, window_step):
+        """Helper to process .npy files in a given directory."""
+        files = [f for f in os.listdir(path) if f.lower().endswith('.npy')]
+        for file_name in sorted(files):
+            file_path = os.path.join(path, file_name)
+            try:
+                gesture_name = file_name.split('_')[0]
+                if gesture_name not in gesture_map:
+                    gesture_map[gesture_name] = len(gesture_map)
+                    print(f"  - Found new gesture: '{gesture_name}'. Assigning label: {gesture_map[gesture_name]}")
+                
+                label = gesture_map[gesture_name]
+                data = np.load(file_path)
+                
+                if data.size > 0:
+                    extracted_features = self.extract_features(data, window_size, window_step)
+                    if extracted_features.shape[0] > 0:
+                        all_features.append(extracted_features)
+                        all_labels.append(np.full(extracted_features.shape[0], label))
+            except Exception as e:
+                print(f"  - Could not read {file_name}: {e}")
 
     def classify(self, features):
         """
@@ -246,27 +255,41 @@ class GestureClassifier:
         if self.model is None or self.scaler is None or self.label_to_gesture is None:
             return "ERROR: Model not loaded! Please run 'tr' command."
 
-        if features.shape[0] == 0:
-            return "No features to classify"
+        # The number of windows to consider for a stable prediction.
+        # This helps filter out momentary incorrect classifications.
+        STABILITY_THRESHOLD = 2 
+
+        if features.shape[0] < STABILITY_THRESHOLD:
+            return "Not enough data"
 
         # Normalize
         features_scaled = self.scaler.transform(features)
 
-        # Predict
-        predictions = self.model.predict(features_scaled)
+        # Predict on each window
+        window_predictions = self.model.predict(features_scaled)
 
-        # Find the most common prediction (majority vote)
-        if len(predictions) > 0:
-            most_common_prediction = np.bincount(predictions).argmax()
-            return self.label_to_gesture[most_common_prediction]
+        # Perform a more robust majority vote (mode)
+        if len(window_predictions) > 0:
+            # Find the most frequent prediction label in the recent windows
+            counts = np.bincount(window_predictions)
+            most_common_label = np.argmax(counts)
+            
+            # Only return a prediction if it's seen consistently
+            if counts[most_common_label] >= STABILITY_THRESHOLD:
+                return self.label_to_gesture[most_common_label]
+            else:
+                return "Uncertain" # Return a neutral state if not stable
         else:
             return "Not enough data for a prediction"
 
-    def load_model(self, model_path='gesture_model.pkl', scaler_path='scaler.pkl', map_path='gesture_map.json'):
+
+    def load_model(self, model_path='model_random_forest.pkl', scaler_path='scaler.pkl', map_path='gesture_map.json'):
         """Load trained model from disk"""
         if not all(os.path.exists(p) for p in [model_path, scaler_path, map_path]):
+            self.model = None
+            self.loaded_model_name = "None"
             print(f"Warning: One or more model files not found ({model_path}, {scaler_path}, {map_path}).")
-            print("Please run the 'tr' command to train a new model.")
+            print("Please run the 'tr' command to train models.")
             return False
 
         try:
@@ -279,8 +302,15 @@ class GestureClassifier:
             # Create a reverse map for easy lookup
             self.label_to_gesture = {v: k for k, v in self.gesture_map.items()}
 
-            print(f"Model loaded successfully from {model_path}")
+            # Extract and store the friendly name of the loaded model
+            base_name = os.path.basename(model_path)
+            model_name_part = base_name.replace('model_', '').replace('.pkl', '')
+            self.loaded_model_name = model_name_part.replace('_', ' ').title()
+
+            print(f"Model '{self.loaded_model_name}' loaded successfully from {model_path}")
             return True
         except Exception as e:
             print(f"Error loading model files: {e}")
+            self.model = None
+            self.loaded_model_name = "None"
             return False

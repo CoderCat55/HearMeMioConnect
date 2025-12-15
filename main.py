@@ -65,8 +65,8 @@ def get_calibration_buffer_from_shared_mem(calib_buffer, calib_index):
 
 def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION):
     """Read the last N seconds from the streaming buffer"""
-    # Calculate how many samples we need
-    samples_per_second = 100  # Approximate (depends on actual rate)
+    # The Myo armband's EMG data rate is 200Hz. This is a critical value.
+    samples_per_second = 200
     num_samples = int(window_seconds * samples_per_second)
     
     # Get current position
@@ -96,7 +96,7 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
               recording_gesture, classifier):
     """Called from main process when user wants to calibrate"""
     """print(f"Calibration will start in ", end='', flush=True)
-    for i in range(CALIBRATION_STARTS, 0, -1):
+    for i in range(CALIBRATION_STARTS, 0, -1): 
         print(f"{i}... ", end='', flush=True)
         time.sleep(1)
     print("\n")
@@ -158,17 +158,58 @@ def Classify(stream_buffer, stream_index, classifier):
     print(f"Predicted gesture: {result}")
     return result
 
-def LiveClassify():
+def LiveClassify(stream_buffer, stream_index, classifier):
     """Continuously classify gestures in real-time for a fixed number of iterations."""
     if not classifier.model:
         print("ERROR: Model not loaded. Please train a model using 'tr' or ensure model files are present.")
         return
 
-    print("\n>>> Starting LIVE classification... (20 iterations) <<<")
+    print("\n>>> Starting Standard LIVE classification (20 iterations) <<<")
+    last_gesture = "---"
     for i in range(1, 21):
-        print(f"\n--- Classification {i}/20 ---")
-        Classify(stream_buffer, stream_index, classifier)
-        time.sleep(CLASSIFICATION_DURATION)
+        # Get recent data
+        current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
+    
+        if current_data is None or len(current_data) < 10:
+            print(f"\rIteration {i}/20: Not enough data...", end="", flush=True)
+            time.sleep(0.5)
+            continue
+
+        # Extract features and classify
+        features = GestureClassifier.extract_features(current_data)
+        prediction = classifier.classify(features)
+
+        # Only update if the prediction is confident
+        if prediction not in ["Uncertain", "Not enough data"]:
+            last_gesture = prediction
+        
+        print(f"\rIteration {i}/20: {last_gesture.ljust(20)}", end="", flush=True)
+        time.sleep(0.5) # Pause between iterations
+    print("\n>>> Live classification finished. <<<")
+
+def ContinuousLiveClassify(stream_buffer, stream_index, classifier):
+    """Continuously classify gestures in real-time with stateful smoothing until interrupted."""
+    if not classifier.model:
+        print("ERROR: Model not loaded. Please use 'tr' or 'load' command.")
+        return
+
+    print("\n>>> Starting CONTINUOUS LIVE classification... Press Ctrl+C to stop. <<<")
+    last_stable_gesture = "---"
+    try:
+        while True:
+            current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
+            if current_data is None or len(current_data) < 10:
+                time.sleep(0.5)
+                continue
+            features = GestureClassifier.extract_features(current_data)
+            prediction = classifier.classify(features)
+            if prediction not in ["Uncertain", "Not enough data", "---"] and prediction != last_stable_gesture:
+                last_stable_gesture = prediction
+            
+            print(f"\rPrediction: {last_stable_gesture.ljust(20)}", end="", flush=True)
+            time.sleep(0.2) # Shorter sleep for more responsive feel
+    except KeyboardInterrupt:
+        print("\n>>> Live classification stopped. <<<")
 
 def Train(classifier):
     """Called from main process to train a new model using the internal method."""
@@ -179,9 +220,39 @@ def Train(classifier):
     else:
         print("--- Model training failed. Please check logs for errors. ---")
 
+def LoadModel(classifier):
+    """Presents a menu to the user to load a specific trained model."""
+    available_models = {
+        "1": "decision_tree",
+        "2": "logistic_regression",
+        "3": "k_nearest_neighbors",
+        "4": "support_vector_machine",
+        "5": "random_forest"
+    } # Removed Gradient Boosting
+
+    print("\n--- Available Models ---")
+    for key, name in available_models.items():
+        # Format the name for display, e.g., "decision_tree" -> "Decision Tree"
+        display_name = name.replace('_', ' ').title()
+        print(f"  {key}: {display_name}")
+
+    choice = input("Select a model to load (or press Enter to cancel): ")
+
+    if choice in available_models:
+        model_name = available_models[choice]
+        model_path = f'model_{model_name}.pkl'
+        print(f"\nAttempting to load '{model_path}'...")
+        # The scaler and map are common, so we only need to specify the new model path.
+        classifier.load_model(model_path=model_path)
+    elif choice == "":
+        print("Model loading cancelled.")
+    else:
+        print("Invalid selection.")
+
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
            recording_flag, recording_gesture, classifier):
-    value = input("Enter your command majesty: ")
+    prompt = f"[{classifier.loaded_model_name}] Enter your command: "
+    value = input(prompt) 
     match value:
         case "tr":  #train
             print("now will run train function")
@@ -201,20 +272,24 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
                      recording_gesture, classifier)
         case "live": # live classification
-            print("now will run live classify function")
-            print(f"Classify will start in ", end='', flush=True)
+            print("Starting standard live classification (20 iterations)...")
+            print(f"Waiting for buffer to fill... ", end='', flush=True)
             for i in range(CLASSIFICATION_STARTS, 0, -1):
                 print(f"{i}... ", end='', flush=True)
                 time.sleep(1)
             print("\n")
-            print("Classifying gesture...")
-            LiveClassify()
+            LiveClassify(stream_buffer, stream_index, classifier)
+        case "clive": # continuous live classification
+            print("Starting continuous live classification...")
+            ContinuousLiveClassify(stream_buffer, stream_index, classifier)
+        case "load": # load a specific model
+            LoadModel(classifier)
         case _:
-            print("Invalid command! Use: tr, cf, cb, or live")
+            print("Invalid command! Use: tr, cf, cb, live, clive, load")
 
 if __name__ == "__main__":
     # Required for multiprocessing on Windows when building an executable
-    freeze_support()
+    freeze_support() 
 
     print("=== Gesture Recognition System ===")
     print("Initializing...")
@@ -243,7 +318,7 @@ if __name__ == "__main__":
     data_process.daemon = True  # Dies when main process dies
     data_process.start()
     time.sleep(2)  # wait for dataprocess to start
-    # Give it time to connect
+    # Give it time to connect 
     print("Connecting to Myo armbands...")
     time.sleep(5)
 
@@ -253,13 +328,13 @@ if __name__ == "__main__":
     
     # Give it time to connect
     print("Connecting to Myo armbands...")
-    time.sleep(5)
+    time.sleep(5) 
     
     # Initialize classifier in main process
     classifier = GestureClassifier()
     classifier.load_model() # Try to load existing model on startup
     
-    print("\nSystem ready! Available commands: tr=train, cf=classify, cb=calibrate, live=live classification")
+    print("\nSystem ready! Available commands: tr, cf, cb, live, clive, load")
     
     # Command loop
     try:
