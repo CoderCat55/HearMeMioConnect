@@ -168,7 +168,7 @@ def LiveClassify():
     for i in range(1, 21):
         print(f"\n--- Classification {i}/20 ---")
         Classify(stream_buffer, stream_index, classifier)
-        time.sleep(1)
+        time.sleep(CLASSIFICATION_DURATION)
 
 def Train(classifier):
     """Called from main process to train a new model using the internal method."""
