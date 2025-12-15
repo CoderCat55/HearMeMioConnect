@@ -8,6 +8,8 @@ import time
 # Constants
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
 CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
+###bufferların farklı boyutlarda olması sorun yaratır mı???
+
 
 CALIBRATION_DURATION = 3  # seconds
 CLASSIFICATION_DURATION = 3  # same!
@@ -144,7 +146,7 @@ def Classify(stream_buffer, stream_index, classifier):
     """Called from main process when user wants to classify"""
     time.sleep(CLASSIFICATION_DURATION)
     # Read current data from shared memory (last 1 second)
-    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=1.0)
+    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
     
     if current_data is None or len(current_data) < 10:
         print("ERROR: Not enough data to classify!")
