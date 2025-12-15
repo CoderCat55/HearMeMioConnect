@@ -12,14 +12,46 @@ import math
 app = Flask(__name__)
 
 # Configuration
+SSID="hearme"
+PASSWORD="123456789"
 PORT = 5002
 
 # Sensor data structure (will be populated from your shared memory)
 sensor_data = {
-    'ax1': 0.0, 'ay1': 0.0, 'az1': 0.0,  # Accelerometer 1
-    'ax2': 0.0, 'ay2': 0.0, 'az2': 0.0,  # Accelerometer 2
-    'emg1': 0.0,  # EM.G sensor 1
-    'emg2': 0.0,  # EMG sensor 2
+    'ituemg0': 0,
+    'ituemg1': 0,
+    'ituemg2': 0,
+    'ituemg3': 0,
+    'ituemg4': 0,
+    'ituemg5': 0,
+    'ituemg6': 0,
+    'ituemg7': 0,
+     'ituax': 0,
+    'ituay': 0,
+    'ituaz': 0,
+    'itugx': 0,
+    'itugy': 0,
+    'itugz': 0,
+    'ituroll': 0,
+    'ituyaw': 0,
+    'itupitch': 0,
+    'maremg0': 0,
+    'maremg1': 0,
+    'maremg2': 0,
+    'maremg3': 0,
+    'maremg4': 0,
+    'maremg5': 0,
+    'maremg6': 0,
+    'maremg7': 0,
+    'marax': 0,
+    'maray': 0,
+    'maraz': 0,
+    'margx': 0,
+    'margy': 0,
+    'margz': 0,
+    'marroll': 0,
+    'maryaw': 0,
+    'marpitch': 0,
     'cr': 0,      # Classification result
     'calword': 0,
     'connections': 0
@@ -59,45 +91,15 @@ def get_data():
 @app.route('/classify')
 def classify():
     """Perform gesture classification"""
-    sensor_data['cr'] = classify_gesture()
-    print(f"Classification requested - Result: {sensor_data['cr']}")
-    return jsonify(sensor_data)
+    
+    #return jsonify(sensor_data)
 
 
 @app.route('/setcw')
 def set_calibration_word():
     """Save calibration sample for a word"""
     value = request.args.get('value', type=int)
-    print("you called setcw functiion")
-    if value is None:
-        return "Missing value parameter", 400
     
-    if value < 1 or value > NUM_WORDS:
-        return f"Invalid word index (1-{NUM_WORDS})", 400
-    
-    if save_calibration_sample(value - 1):
-        return f"Saved sample for word {value}", 200
-    else:
-        return "Error saving sample", 500
-
-
-@app.route('/deletecw')
-def delete_calibration_word():
-    """Clear calibration data for a word"""
-    value = request.args.get('value', type=int)
-    print("you called deletecw functiion")
-    
-    if value is None:
-        return "Missing value parameter", 400
-    
-    if value < 1 or value > NUM_WORDS:
-        return f"Invalid word index (1-{NUM_WORDS})", 400
-    
-    if clear_calibration_data(value - 1):
-        return f"Cleared calibration for word {value}", 200
-    else:
-        return "Error clearing calibration", 500
-
 
 # ==================== Helper Functions ====================
 
@@ -127,7 +129,7 @@ if __name__ == '__main__':
     print("Raspberry Pi Gesture Recognition Server")
     print("=" * 50)
     print(f"Access via: http://hmrasphost.local:{PORT}/")
-    print(f"Or via AP IP: http://192.168.4.1:{PORT}/")
+    print(f"Or via AP IP: http://192.168.4.1:{PORT}/"+"this one works") 
     print(f"WiFi AP SSID: {SSID}")
     print(f"WiFi AP Password: {PASSWORD}")
     print("=" * 50)
