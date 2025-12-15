@@ -143,7 +143,7 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
 def Classify(stream_buffer, stream_index, classifier):
     """Called from main process when user wants to classify"""
     time.sleep(CLASSIFICATION_DURATION)
-    # Read current data from shared memory (last 1 second)
+    # Read current data from shared memory (last CLASSIFICATION_DURATION second)
     current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
     
     if current_data is None or len(current_data) < 10:
