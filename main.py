@@ -162,7 +162,7 @@ class GestureSystem:
         """Check if data acquisition is running"""
         return self.data_process is not None and self.data_process.is_alive()
     
-    def Calibrate(self, gesture_name):
+    def calibrate(self, gesture_name):
         """Calibrate a gesture"""
         if not self.is_data_acquisition_running():
             print("ERROR: Data acquisition not running!")
@@ -207,7 +207,7 @@ class GestureSystem:
         print(f"Calibration complete! Saved {len(recorded_data)} samples")
         return True
     
-    def Classify(self):
+    def classify(self):
         """Classify current gesture"""
         if not self.is_data_acquisition_running():
             print("ERROR: Data acquisition not running!")
@@ -232,7 +232,7 @@ class GestureSystem:
         print(f"Predicted gesture: {result}")
         return result
     
-    def Train(self):
+    def train(self):
         """Train the classifier"""
         print("Training model...")
         success = self.classifier.train()
@@ -244,7 +244,7 @@ class GestureSystem:
             print("Training failed! Make sure you have calibration data.")
             return False
     
-    def LiveClassify(self, num_classifications=20):
+    def live_classify(self, num_classifications=20):
         """Continuously classify gestures"""
         if self.classifier.model is None:
             print("ERROR: Model not trained yet! Please train the model first using 'tr'.")
