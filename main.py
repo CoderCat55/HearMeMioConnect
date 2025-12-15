@@ -94,188 +94,245 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             part2 = stream_buffer[:current_idx_wrapped]  # From beginning to current
             return np.concatenate([part1, part2])
         
-def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-              recording_gesture, classifier):
-    """Called from main process when user wants to calibrate"""
-    """print(f"Calibration will start in ", end='', flush=True)
-    for i in range(CALIBRATION_STARTS, 0, -1):
-        print(f"{i}... ", end='', flush=True)
-        time.sleep(1)
-    print("\n")
-    print(f"Recording calibration for '{gesture_name}' - '{CALIBRATION_DURATION} seconds...")
-    """ 
-    #şimdilik veri toplayacağumuz için burası kapalı.
-    # Reset calibration buffer
-    calib_index.value = 0
+class GestureSystem:
+    """Central system managing all components: shared memory, processes, and classifier"""
     
-    # Set flag in shared memory
-    gesture_bytes = gesture_name.encode('utf-8')
-    for i, byte in enumerate(gesture_bytes[:50]):  # Max 50 chars
-        recording_gesture[i] = byte
-    recording_flag.value = 1  # Start recording
+    def __init__(self):
+        print("=== Initializing Gesture Recognition System ===")
+        
+        # Create shared memory buffers
+        self.shm_stream = shared_memory.SharedMemory(create=True, size=STREAM_BUFFER_SIZE*34*4)
+        self.stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=self.shm_stream.buf)
+        self.stream_buffer.fill(0)  # Initialize to zero
+        
+        self.shm_calib = shared_memory.SharedMemory(create=True, size=CALIBRATION_BUFFER_SIZE*34*4)
+        self.calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 34), dtype=np.float32, buffer=self.shm_calib.buf)
+        self.calib_buffer.fill(0)
+        
+        # Create shared indices and flags
+        self.stream_index = mp.Value('i', 0)
+        self.calib_index = mp.Value('i', 0)
+        self.recording_flag = mp.Value('i', 0)
+        self.recording_gesture = mp.Array('c', 50)
+        
+        # Initialize classifier
+        self.classifier = GestureClassifier()
+        self.classifier.load_calibration_data()
+        
+        # Process reference
+        self.data_process = None
+        
+        print("System initialized!")
     
-    # Wait 3 seconds
-    print("Recording... ", end='', flush=True)
-    for i in range(CALIBRATION_DURATION):
-        time.sleep(1)
-        print(f"{CALIBRATION_DURATION-i}... ", end='', flush=True)
-    print("Done!")
+    def start_data_acquisition(self):
+        """Start the data acquisition process (called from /connect endpoint)"""
+        if self.data_process is not None and self.data_process.is_alive():
+            print("Data acquisition already running!")
+            return False
+        
+        print("Starting data acquisition process...")
+        self.data_process = Process(
+            target=data_acquisition_process,
+            args=(self.shm_stream.name, self.shm_calib.name, self.stream_index, 
+                  self.calib_index, self.recording_flag, self.recording_gesture)
+        )
+        self.data_process.daemon = True  # Dies when main process dies
+        self.data_process.start()
+        
+        print("Waiting for Myo connections...")
+        time.sleep(5)  # Give it time to connect
+        
+        if not self.data_process.is_alive():
+            print("ERROR: Data acquisition process failed to start!")
+            return False
+        
+        print("Data acquisition process started successfully!")
+        return True
     
-    # Stop recording
-    recording_flag.value = 0
-    time.sleep(0.5)  # Let final batch flush
-    # Read recorded data
-    recorded_data = get_calibration_buffer_from_shared_mem(calib_buffer, calib_index)
+    def stop_data_acquisition(self):
+        """Stop the data acquisition process"""
+        if self.data_process is not None and self.data_process.is_alive():
+            print("Stopping data acquisition...")
+            self.data_process.terminate()
+            self.data_process.join(timeout=5)
+            self.data_process = None
+            print("Data acquisition stopped.")
     
-    if recorded_data is None or len(recorded_data) == 0:
-        print("ERROR: No data was recorded! Check if Myos are connected.")
-        return
+    def is_data_acquisition_running(self):
+        """Check if data acquisition is running"""
+        return self.data_process is not None and self.data_process.is_alive()
     
-    # Add to classifier
-    classifier.add_calibration_sample(gesture_name, recorded_data)
+    def Calibrate(self, gesture_name):
+        """Calibrate a gesture"""
+        if not self.is_data_acquisition_running():
+            print("ERROR: Data acquisition not running!")
+            return False
+        
+        # Reset calibration buffer
+        self.calib_index.value = 0
+        
+        # Set flag in shared memory
+        gesture_bytes = gesture_name.encode('utf-8')
+        for i, byte in enumerate(gesture_bytes[:50]):  # Max 50 chars
+            self.recording_gesture[i] = byte
+        self.recording_flag.value = 1  # Start recording
+        
+        # Wait 3 seconds
+        print("Recording... ", end='', flush=True)
+        for i in range(CALIBRATION_DURATION):
+            time.sleep(1)
+            print(f"{CALIBRATION_DURATION-i}... ", end='', flush=True)
+        print("Done!")
+        
+        # Stop recording
+        self.recording_flag.value = 0
+        time.sleep(0.5)  # Let final batch flush
+        
+        # Read recorded data
+        recorded_data = get_calibration_buffer_from_shared_mem(self.calib_buffer, self.calib_index)
+        
+        if recorded_data is None or len(recorded_data) == 0:
+            print("ERROR: No data was recorded! Check if Myos are connected.")
+            return False
+        
+        # Add to classifier
+        self.classifier.add_calibration_sample(gesture_name, recorded_data)
+        
+        # Save to disk
+        import os
+        os.makedirs('calibration_data', exist_ok=True)
+        timestamp = int(time.time())
+        np.save(f'calibration_data/{gesture_name}_{timestamp}.npy', recorded_data)
+        
+        print(f"Calibration complete! Saved {len(recorded_data)} samples")
+        return True
     
-    # Save to disk
-    import os
-    os.makedirs('calibration_data', exist_ok=True)
-    timestamp = int(time.time())
-    np.save(f'calibration_data/{gesture_name}_{timestamp}.npy', recorded_data)
-    
-    print(f"Calibration complete! Saved {len(recorded_data)} samples")
-
-def Classify(stream_buffer, stream_index, classifier):
-    """Called from main process when user wants to classify"""
-    time.sleep(CLASSIFICATION_DURATION)
-    # Read current data from shared memory (last 1 second)
-    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
-    
-    if current_data is None or len(current_data) < 10:
-        print("ERROR: Not enough data to classify!")
-        return None
-    
-    # Extract features
-    features = GestureClassifier.extract_features(current_data)
-    
-    # Classify
-    result = classifier.classify(features)
-    print(f"Predicted gesture: {result}")
-    return result
-
-def LiveClassify():
-    """Continuously classify gestures in real-time."""
-    if classifier.model is None:
-        print("ERROR: Model not trained yet! Please train the model first using 'tr'.")
-        return
-
-    print("\n>>> Starting LIVE classification... classify fo 20 times <<<")
-    for i in range(1,20,1):
-        print(f"\nClassification {i}/20:")
-        Classify(stream_buffer, stream_index, classifier)
-        print("waiting1 sec for other classification")
+    def Classify(self):
+        """Classify current gesture"""
+        if not self.is_data_acquisition_running():
+            print("ERROR: Data acquisition not running!")
+            return None
+        
         time.sleep(CLASSIFICATION_DURATION)
+        
+        # Read current data from shared memory
+        current_data = get_recent_data_from_shared_mem(
+            self.stream_buffer, self.stream_index, window_seconds=CLASSIFICATION_DURATION
+        )
+        
+        if current_data is None or len(current_data) < 10:
+            print("ERROR: Not enough data to classify!")
+            return None
+        
+        # Extract features
+        features = GestureClassifier.extract_features(current_data)
+        
+        # Classify
+        result = self.classifier.classify(features)
+        print(f"Predicted gesture: {result}")
+        return result
+    
+    def Train(self):
+        """Train the classifier"""
+        print("Training model...")
+        success = self.classifier.train()
+        if success:
+            self.classifier.save_model('model.pkl')
+            print("Training complete!")
+            return True
+        else:
+            print("Training failed! Make sure you have calibration data.")
+            return False
+    
+    def LiveClassify(self, num_classifications=20):
+        """Continuously classify gestures"""
+        if self.classifier.model is None:
+            print("ERROR: Model not trained yet! Please train the model first using 'tr'.")
+            return
+        
+        print(f"\n>>> Starting LIVE classification... classify {num_classifications} times <<<")
+        for i in range(1, num_classifications + 1):
+            print(f"\nClassification {i}/{num_classifications}:")
+            self.classify()
+            print("waiting 1 sec for next classification")
+            time.sleep(CLASSIFICATION_DURATION)
+    
+    def cleanup(self):
+        """Clean up resources"""
+        print("\nCleaning up...")
+        self.stop_data_acquisition()
+        
+        self.shm_stream.close()
+        self.shm_stream.unlink()
+        self.shm_calib.close()
+        self.shm_calib.unlink()
+        
+        print("Cleanup complete!")
 
-def Train(classifier):
-    """Called from main process when user wants to train"""
-    print("Training model...")
-    success = classifier.train()
-    if success:
-        classifier.save_model('model.pkl')
-        print("Training complete!")
-    else:
-        print("Training failed! Make sure you have calibration data.")
-
-def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
-           recording_flag, recording_gesture, classifier):
-    value = input("Enter your command majesty: ")
-    match value:
-        case "tr":  #train
-            print("now will run train function")
-            Train(classifier)
-        case "cf": # classify <3
-            print("now will run classify function")
-            print(f"Classify will start in ", end='', flush=True)
-            for i in range(CLASSIFICATION_STARTS, 0, -1):
-                print(f"{i}... ", end='', flush=True)
-                time.sleep(1)
-            print("\n")
-            print("Classifying gesture...")
-            Classify(stream_buffer, stream_index, classifier)
-        case "cb":  #calibrate
-            print("now will run calibrate function")
-            gesture_name = input("Which gesture would you like to calibrate? ")
-            Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-                     recording_gesture, classifier)
-        case "live": # live classification
-            print("now will run live classify function")
-            print(f"Classify will start in ", end='', flush=True)
-            for i in range(CLASSIFICATION_STARTS, 0, -1):
-                print(f"{i}... ", end='', flush=True)
-                time.sleep(1)
-            print("\n")
-            print("Classifying gesture...")
-            LiveClassify()
-        case _:
-            print("Invalid command! Use: tr, cf, cb, or live")
-
-if __name__ == "__main__":
-    print("=== Gesture Recognition System ===")
-    print("Initializing...")
-    
-    # Create shared memory buffers
-    shm_stream = shared_memory.SharedMemory(create=True, size=STREAM_BUFFER_SIZE*34*4)
-    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
-    stream_buffer.fill(0)  # Initialize to zero
-    
-    shm_calib = shared_memory.SharedMemory(create=True, size=CALIBRATION_BUFFER_SIZE*34*4)
-    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_calib.buf)
-    calib_buffer.fill(0)
-    
-    # Create shared indices and flags
-    stream_index = mp.Value('i', 0)
-    calib_index = mp.Value('i', 0)
-    recording_flag = mp.Value('i', 0)
-    recording_gesture = mp.Array('c', 50)
-    """önce webserverini başlat çünkü mobil uygulamadan connect tuşuna basacağız"""
-    """web serverinde connect endpointine gidildiğinde data aqusition processi başlat(myolara bağlanma vb.)"""
-    
-    # Start data acquisition process
-    data_process = Process(
-        target=data_acquisition_process,
-        args=(shm_stream.name, shm_calib.name, stream_index, calib_index, 
-              recording_flag, recording_gesture)
-    )
-    data_process.daemon = True  # Dies when main process dies
-    data_process.start()
-    time.sleep(2)  # wait for dataprocess to start
-    # Give it time to connect
-    print("Connecting to Myo armbands...")
-    time.sleep(5)
-
-    if not data_process.is_alive():
-        print("ERROR: Data acquisition process failed to start!")
-        print("Check if Myo dongle is connected and MyoConnect is closed")
-    
-    # Give it time to connect
-    print("Connecting to Myo armbands...")
-    time.sleep(5)
-    
-    # Initialize classifier in main process
-    classifier = GestureClassifier()
-    classifier.load_calibration_data()
-    
-    print("\nSystem ready! Available commands: tr= train, cf =classify,cb= calibrate")
+def command_loop(system):
+    """Interactive command loop for testing"""
+    print("\nSystem ready! Available commands: tr=train, cf=classify, cb=calibrate, live=live classify")
     print()
     
-    # Command loop
     try:
         while True:
-            Command(stream_buffer, stream_index, calib_buffer, calib_index,
-                   recording_flag, recording_gesture, classifier)
+            value = input("Enter your command: ")
+            
+            match value:
+                case "tr":  # train
+                    print("Training model...")
+                    system.train()
+                    
+                case "cf":  # classify
+                    print(f"Classify will start in ", end='', flush=True)
+                    for i in range(CLASSIFICATION_STARTS, 0, -1):
+                        print(f"{i}... ", end='', flush=True)
+                        time.sleep(1)
+                    print("\nClassifying gesture...")
+                    system.classify()
+                    
+                case "cb":  # calibrate
+                    gesture_name = input("Which gesture would you like to calibrate? ")
+                    print(f"Calibration will start in ", end='', flush=True)
+                    for i in range(CALIBRATION_STARTS, 0, -1):
+                        print(f"{i}... ", end='', flush=True)
+                        time.sleep(1)
+                    print("\n")
+                    print(f"Recording calibration for '{gesture_name}' - '{CALIBRATION_DURATION} seconds...")
+                    system.calibrate(gesture_name)
+                    
+                case "live":  # live classification
+                    print(f"Classification will start in ", end='', flush=True)
+                    for i in range(CLASSIFICATION_STARTS, 0, -1):
+                        print(f"{i}... ", end='', flush=True)
+                        time.sleep(1)
+                    print("\n")
+                    system.live_classify()
+                    
+                case _:
+                    print("Invalid command! Use: tr, cf, cb, or live")
+                    
     except KeyboardInterrupt:
         print("\nShutting down...")
-        data_process.terminate()
-        data_process.join()
-        shm_stream.close()
-        shm_stream.unlink()
-        shm_calib.close()
-        shm_calib.unlink()
+        system.cleanup()
         print("Goodbye!")
+
+
+if __name__ == "__main__":
+    # Create the system
+    system = GestureSystem()
+    
+    # Import and inject into webserver
+    from webserver import app, inject_system
+    inject_system(system)
+    
+    print("\n" + "="*50)
+    print("Starting Flask web server...")
+    print("="*50)
+    
+    # Run Flask server
+    try:
+        app.run(host='0.0.0.0', port=5002, debug=True, use_reloader=False)
+    except KeyboardInterrupt:
+        print("\nShutting down...")
+        system.cleanup()
