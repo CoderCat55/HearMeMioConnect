@@ -1,6 +1,6 @@
 """handles multiprocessing and user commands"""
 import multiprocessing as mp
-from multiprocessing import Process, shared_memory
+from multiprocessing import Process, shared_memory, freeze_support
 import numpy as np
 from model import GestureClassifier
 import time
@@ -144,7 +144,7 @@ def Classify(stream_buffer, stream_index, classifier):
     """Called from main process when user wants to classify"""
     time.sleep(CLASSIFICATION_DURATION)
     # Read current data from shared memory (last 1 second)
-    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=1.0)
+    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
     
     if current_data is None or len(current_data) < 10:
         print("ERROR: Not enough data to classify!")
@@ -159,27 +159,25 @@ def Classify(stream_buffer, stream_index, classifier):
     return result
 
 def LiveClassify():
-    """Continuously classify gestures in real-time."""
-    if classifier.model is None:
-        print("ERROR: Model not trained yet! Please train the model first using 'tr'.")
+    """Continuously classify gestures in real-time for a fixed number of iterations."""
+    if not classifier.model:
+        print("ERROR: Model not loaded. Please train a model using 'tr' or ensure model files are present.")
         return
 
-    print("\n>>> Starting LIVE classification... classify fo 20 times <<<")
-    for i in range(1,20,1):
-        print(f"\nClassification {i}/20:")
+    print("\n>>> Starting LIVE classification... (20 iterations) <<<")
+    for i in range(1, 21):
+        print(f"\n--- Classification {i}/20 ---")
         Classify(stream_buffer, stream_index, classifier)
-        print("waiting1 sec for other classification")
         time.sleep(1)
 
 def Train(classifier):
-    """Called from main process when user wants to train"""
-    print("Training model...")
+    """Called from main process to train a new model using the internal method."""
+    print("--- Initializing model training ---")
     success = classifier.train()
     if success:
-        classifier.save_model('model.pkl')
-        print("Training complete!")
+        print("--- Model successfully trained and loaded! ---")
     else:
-        print("Training failed! Make sure you have calibration data.")
+        print("--- Model training failed. Please check logs for errors. ---")
 
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
            recording_flag, recording_gesture, classifier):
@@ -215,6 +213,9 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             print("Invalid command! Use: tr, cf, cb, or live")
 
 if __name__ == "__main__":
+    # Required for multiprocessing on Windows when building an executable
+    freeze_support()
+
     print("=== Gesture Recognition System ===")
     print("Initializing...")
     
@@ -256,10 +257,9 @@ if __name__ == "__main__":
     
     # Initialize classifier in main process
     classifier = GestureClassifier()
-    classifier.load_calibration_data()
+    classifier.load_model() # Try to load existing model on startup
     
-    print("\nSystem ready! Available commands: tr= train, cf =classify,cb= calibrate")
-    print()
+    print("\nSystem ready! Available commands: tr=train, cf=classify, cb=calibrate, live=live classification")
     
     # Command loop
     try:
