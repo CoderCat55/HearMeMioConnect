@@ -234,6 +234,8 @@ if __name__ == "__main__":
     calib_index = mp.Value('i', 0)
     recording_flag = mp.Value('i', 0)
     recording_gesture = mp.Array('c', 50)
+    """önce webserverini başlat çünkü mobil uygulamadan connect tuşuna basacağız"""
+    """web serverinde connect endpointine gidildiğinde data aqusition processi başlat(myolara bağlanma vb.)"""
     
     # Start data acquisition process
     data_process = Process(
