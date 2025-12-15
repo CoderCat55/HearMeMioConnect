@@ -21,12 +21,14 @@ I have a webserver.py
 in main.py it should first initialize server process and server process will be going on until ctrl c
 when connect endpoint is accessed we should initialiize data aqusiiton process
 
-
+RULES:
 Please really read all the code. 
 Do not make assumptions while answering.
 While giving ansswers include the chain of thought, why did you make that assumption, which part of thee code leads you to that? If you are not sure about how something works just tell me. 
 
 Your aim is to discuss the structure with me. I need you to be objective. You should use strategies like listing pros and cons of a situation and judge it according to my aim.
+
+When change of code only change what is relevant do not try to change anything that is not relevant with my aim.
 
 
 
