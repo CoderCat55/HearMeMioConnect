@@ -66,7 +66,7 @@ def get_calibration_buffer_from_shared_mem(calib_buffer, calib_index):
 def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION):
     """Read the last N seconds from the streaming buffer"""
     # The Myo armband's EMG data rate is 200Hz. This is a critical value.
-    samples_per_second = 200
+    samples_per_second = 100
     num_samples = int(window_seconds * samples_per_second)
     
     # Get current position
@@ -211,6 +211,50 @@ def ContinuousLiveClassify(stream_buffer, stream_index, classifier):
     except KeyboardInterrupt:
         print("\n>>> Live classification stopped. <<<")
 
+def LiveValidate(stream_buffer, stream_index, classifier):
+    """Runs a structured validation test to measure real-time accuracy."""
+    if not classifier.model or not classifier.gesture_map:
+        print("ERROR: Model not loaded. Please use 'tr' or 'load' command.")
+        return
+
+    gestures_to_test = list(classifier.gesture_map.keys())
+    if not gestures_to_test:
+        print("No gestures found in the model map.")
+        return
+
+    print("\n--- Starting Live Validation Mode ---")
+    print("For each gesture, you will be asked to perform it for 5 seconds.")
+    
+    overall_results = {}
+
+    for gesture in gestures_to_test:
+        input(f"\nPress Enter when you are ready to perform the '{gesture}' gesture...")
+        print(f"Performing '{gesture}' for 5 seconds... ", end="", flush=True)
+        
+        predictions = []
+        start_time = time.time()
+        while time.time() - start_time < 5:
+            current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
+            if current_data is None or len(current_data) < 200: # Need at least 1s of data
+                time.sleep(0.1)
+                continue
+            
+            features = GestureClassifier.extract_features(current_data)
+            prediction = classifier.classify(features)
+            predictions.append(prediction)
+            time.sleep(0.2)
+        
+        # Calculate and display results for this gesture
+        correct_count = predictions.count(gesture)
+        accuracy = (correct_count / len(predictions)) * 100 if predictions else 0
+        print(f"Done! Real-time accuracy for '{gesture}': {accuracy:.2f}%")
+        overall_results[gesture] = accuracy
+
+    print("\n--- Live Validation Summary ---")
+    for gesture, acc in overall_results.items():
+        print(f"- {gesture.ljust(15)}: {acc:.2f}%")
+    print("---------------------------------")
+
 def Train(classifier):
     """Called from main process to train a new model using the internal method."""
     print("--- Initializing model training ---")
@@ -282,10 +326,12 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
         case "clive": # continuous live classification
             print("Starting continuous live classification...")
             ContinuousLiveClassify(stream_buffer, stream_index, classifier)
+        case "validate": # Run the live validation test
+            LiveValidate(stream_buffer, stream_index, classifier)
         case "load": # load a specific model
             LoadModel(classifier)
         case _:
-            print("Invalid command! Use: tr, cf, cb, live, clive, load")
+            print("Invalid command! Use: tr, cf, cb, live, clive, validate, load")
 
 if __name__ == "__main__":
     # Required for multiprocessing on Windows when building an executable
@@ -334,7 +380,7 @@ if __name__ == "__main__":
     classifier = GestureClassifier()
     classifier.load_model() # Try to load existing model on startup
     
-    print("\nSystem ready! Available commands: tr, cf, cb, live, clive, load")
+    print("\nSystem ready! Available commands: tr, cf, cb, live, clive, validate, load")
     
     # Command loop
     try:
