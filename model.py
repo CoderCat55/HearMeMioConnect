@@ -216,13 +216,45 @@ class GestureClassifier:
         for path in search_paths:
             self._process_files_in_path(path, gesture_to_label_map, all_features, all_labels, window_size, window_step)
 
-        if not all_features:
+        if not all_features: # This check is now inside _process_files_in_path
             print("\nError: Failed to load any data.")
             return None, None, None
 
         X = np.vstack(all_features)
         y = np.concatenate(all_labels)
+        print(f"\nTotal samples after augmentation: {X.shape[0]}")
         return X, y, gesture_to_label_map
+
+    def _augment_and_extract(self, data, window_size, window_step):
+        """
+        Applies augmentation to the data and extracts features from original and augmented versions.
+        """
+        all_augmented_features = []
+
+        # 1. Original Data
+        original_features = self.extract_features(data, window_size, window_step)
+        if original_features.shape[0] > 0:
+            all_augmented_features.append(original_features)
+
+        # 2. Augmentation: Add small random noise
+        noise_level = 0.01 * np.std(data)
+        noisy_data = data + np.random.normal(0, noise_level, data.shape)
+        noisy_features = self.extract_features(noisy_data, window_size, window_step)
+        if noisy_features.shape[0] > 0:
+            all_augmented_features.append(noisy_features)
+
+        # 3. Augmentation: Time Shift
+        shift_amount = int(0.1 * len(data)) # Shift by 10%
+        if len(data) > shift_amount:
+            shifted_data = np.roll(data, shift_amount, axis=0)
+            shifted_features = self.extract_features(shifted_data, window_size, window_step)
+            if shifted_features.shape[0] > 0:
+                all_augmented_features.append(shifted_features)
+
+        if not all_augmented_features:
+            return np.array([])
+
+        return np.vstack(all_augmented_features)
 
     def _process_files_in_path(self, path, gesture_map, all_features, all_labels, window_size, window_step):
         """Helper to process .npy files in a given directory."""
@@ -239,7 +271,8 @@ class GestureClassifier:
                 data = np.load(file_path)
                 
                 if data.size > 0:
-                    extracted_features = self.extract_features(data, window_size, window_step)
+                    # Use the new augmentation function
+                    extracted_features = self._augment_and_extract(data, window_size, window_step)
                     if extracted_features.shape[0] > 0:
                         all_features.append(extracted_features)
                         all_labels.append(np.full(extracted_features.shape[0], label))

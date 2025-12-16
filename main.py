@@ -164,27 +164,23 @@ def LiveClassify(stream_buffer, stream_index, classifier):
         print("ERROR: Model not loaded. Please train a model using 'tr' or ensure model files are present.")
         return
 
-    print("\n>>> Starting Standard LIVE classification (20 iterations) <<<")
-    last_gesture = "---"
+    print("\n>>> Starting LIVE classification (20 iterations) <<<")
     for i in range(1, 21):
-        # Get recent data
-        current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
-    
-        if current_data is None or len(current_data) < 10:
-            print(f"\rIteration {i}/20: Not enough data...", end="", flush=True)
-            time.sleep(0.5)
-            continue
-
-        # Extract features and classify
-        features = GestureClassifier.extract_features(current_data)
-        prediction = classifier.classify(features)
-
-        # Only update if the prediction is confident
-        if prediction not in ["Uncertain", "Not enough data"]:
-            last_gesture = prediction
+        print(f"\n--- Iteration {i}/20 ---")
         
-        print(f"\rIteration {i}/20: {last_gesture.ljust(20)}", end="", flush=True)
-        time.sleep(0.5) # Pause between iterations
+        # Add a short pause before each classification to allow for gesture changes
+        print(f"Classifying in... ", end='', flush=True)
+        for count in range(3, 0, -1):
+            print(f"{count}... ", end='', flush=True)
+            time.sleep(1)
+        print("Now!")
+
+        # Call the single classification function
+        Classify(stream_buffer, stream_index, classifier)
+        
+        # A brief pause before the next iteration starts
+        time.sleep(1)
+
     print("\n>>> Live classification finished. <<<")
 
 def ContinuousLiveClassify(stream_buffer, stream_index, classifier):
