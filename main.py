@@ -149,12 +149,13 @@ class GestureSystem:
         )
         self.data_process.daemon = True  # Dies when main process dies
         self.data_process.start()
-        
+        time.sleep(2)  # wait for dataprocess to start
         print("Waiting for Myo connections...")
         time.sleep(5)  # Give it time to connect
         
         if not self.data_process.is_alive():
             print("ERROR: Data acquisition process failed to start!")
+            print("Check if Myo dongle is connected and MyoConnect is closed")
             return False
         
         print("Data acquisition process started successfully!")
