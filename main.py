@@ -18,7 +18,7 @@ CALIBRATION_STARTS = 5
 CLASSIFICATION_STARTS = 5
 
 def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index, 
-                            calib_index, recording_flag, recording_gesture):
+                            calib_index, recording_flag, recording_gesture,connection_ready):
     """Process 1: Continuously acquires data from Myo armbands"""
     from mioconnect.src.myodriver import MyoDriver
     from mioconnect.src.config import Config
@@ -51,6 +51,7 @@ def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index,
                 print(f"✗ Warning: Myo {i} (connection {myo.connection_id}) has no device name!")
             else:
                 print(f"✓ Myo {i}: {myo.device_name} (connection {myo.connection_id})")
+    connection_ready.set()  # ADD THIS LINE
     print("Data acquisition process ready!")
     
     # Run forever - NOW this works correctly
@@ -114,6 +115,7 @@ class GestureSystem:
         self.calib_index = mp.Value('i', 0)
         self.recording_flag = mp.Value('i', 0)
         self.recording_gesture = mp.Array('c', 50)
+        self.connection_ready = mp.Event()  # Signal when Myos are connected
         
         # Initialize classifier
         self.classifier = GestureClassifier()
@@ -127,32 +129,41 @@ class GestureSystem:
 
     def start_data_acquisition(self):  
         """Start the data acquisition process (called from /connect endpoint)"""
-        """burası güncellenmeli düzgün yapmıyor işini, eski koddaki halini alıp bir daha deneyelim çünkü 
-        Starting data acquisition process...
-        Waiting for Myo connections...
-        Detecting available ports
-        Port detected:  /dev/ttyACM1
-
-        *** Connecting myo 1 out of 2 ***
-
-        Data acquisition process started successfully!
-"""  
         if self.data_process is not None and self.data_process.is_alive():
             print("Data acquisition already running!")
             return False
+        # Clear the event before starting
+        self.connection_ready.clear()
         
         print("Starting data acquisition process...")
         self.data_process = Process(
             target=data_acquisition_process,
             args=(self.shm_stream.name, self.shm_calib.name, self.stream_index, 
-                  self.calib_index, self.recording_flag, self.recording_gesture)
+                  self.calib_index, self.recording_flag, self.recording_gesture,self.connection_ready)
         )
         self.data_process.daemon = True  # Dies when main process dies
         self.data_process.start()
-        time.sleep(2)  # wait for dataprocess to start
+        #time.sleep(2)  # wait for dataprocess to start
         print("Waiting for Myo connections...")
-        time.sleep(5)  # Give it time to connect
-        
+        #time.sleep(5)  # Give it time to connect
+        # Wait for connection_ready signal with timeout
+        if self.connection_ready.wait(timeout=10):  # Wait up to 10 seconds
+            print("✓ All Myos connected successfully!")
+            return True
+        else:
+            print("✗ ERROR: Connection timeout after 10 seconds!")
+            print("Check if Myo dongle is connected and MyoConnect is closed")
+            
+            # Check if process crashed
+            if not self.data_process.is_alive():
+                print("✗ Data acquisition process died!")
+                self.data_process = None
+            
+            return False
+
+
+        """
+        # burası??
         if not self.data_process.is_alive():
             print("ERROR: Data acquisition process failed to start!")
             print("Check if Myo dongle is connected and MyoConnect is closed")
@@ -160,6 +171,7 @@ class GestureSystem:
         
         print("Data acquisition process started successfully!")
         return True
+        """
     
     def stop_data_acquisition(self):
         """Stop the data acquisition process"""
