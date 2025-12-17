@@ -5,6 +5,7 @@ Provides gesture recognition endpoints for mobile app access
 """
 
 from flask import Flask, jsonify, request
+import numpy as np
 
 app = Flask(__name__)
 
@@ -55,8 +56,61 @@ def index():
 @app.route('/data')
 def data():
     """Get current sensor data from shared memory"""
-    # TODO: If you want real-time sensor data, read from _system.stream_buffer
-    # and update sensor_data dict here
+    if _system is None:
+        return jsonify({
+            "status": "error",
+            "message": "System not initialized"
+        }), 500
+    
+    if not _system.is_data_acquisition_running():
+        return jsonify({
+            "status": "error",
+            "message": "Data acquisition not running. Call /connect first."
+        }), 400
+    
+    # Read last sample from circular buffer (NO modification to shared memory)
+    current_idx = _system.stream_index.value
+    if current_idx == 0:
+        return jsonify({
+            "status": "no_data",
+            "message": "No data available yet. Wait for sensors to start streaming."
+        })
+    
+    # Get the most recent sample (use modulo for circular buffer)
+    from main import STREAM_BUFFER_SIZE
+    buffer_idx = (current_idx - 1) % STREAM_BUFFER_SIZE
+    latest_sample = _system.stream_buffer[buffer_idx].copy()  # .copy() to avoid shared memory issues
+    
+    # Parse into mobile app format (alphabetically: MyoITU first, MyoMarmara second)
+    sensor_data = {
+        # First Myo (index 0-16)
+        'ituemg0': float(latest_sample[0]), 'ituemg1': float(latest_sample[1]),
+        'ituemg2': float(latest_sample[2]), 'ituemg3': float(latest_sample[3]),
+        'ituemg4': float(latest_sample[4]), 'ituemg5': float(latest_sample[5]),
+        'ituemg6': float(latest_sample[6]), 'ituemg7': float(latest_sample[7]),
+        'ituroll': float(latest_sample[8]), 'itupitch': float(latest_sample[9]),
+        'ituyaw': float(latest_sample[10]),
+        'ituax': float(latest_sample[11]), 'ituay': float(latest_sample[12]),
+        'ituaz': float(latest_sample[13]),
+        'itugx': float(latest_sample[14]), 'itugy': float(latest_sample[15]),
+        'itugz': float(latest_sample[16]),
+        
+        # Second Myo (index 17-33)
+        'maremg0': float(latest_sample[17]), 'maremg1': float(latest_sample[18]),
+        'maremg2': float(latest_sample[19]), 'maremg3': float(latest_sample[20]),
+        'maremg4': float(latest_sample[21]), 'maremg5': float(latest_sample[22]),
+        'maremg6': float(latest_sample[23]), 'maremg7': float(latest_sample[24]),
+        'marroll': float(latest_sample[25]), 'marpitch': float(latest_sample[26]),
+        'maryaw': float(latest_sample[27]),
+        'marax': float(latest_sample[28]), 'maray': float(latest_sample[29]),
+        'maraz': float(latest_sample[30]),
+        'margx': float(latest_sample[31]), 'margy': float(latest_sample[32]),
+        'margz': float(latest_sample[33]),
+        
+        'calword': 0,
+        'connections': 1
+    }
+    
     return jsonify(sensor_data)
 
 
