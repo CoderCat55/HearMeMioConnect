@@ -129,6 +129,7 @@ class GestureSystem:
 
     def start_data_acquisition(self):  
         """Start the data acquisition process (called from /connect endpoint)"""
+        #eğer 2. defa connecti çağırınca bunu söylemesin istiyorsan buradaki if i silebilirz sanırım 
         if self.data_process is not None and self.data_process.is_alive():
             print("Data acquisition already running!")
             return False
@@ -143,9 +144,9 @@ class GestureSystem:
         )
         self.data_process.daemon = True  # Dies when main process dies
         self.data_process.start()
-        #time.sleep(2)  # wait for dataprocess to start
         print("Waiting for Myo connections...")
-        #time.sleep(5)  # Give it time to connect
+
+        #sanki bağlanana kadar beklemek daha mantıklı 
         # Wait for connection_ready signal with timeout
         if self.connection_ready.wait(timeout=10):  # Wait up to 10 seconds
             print("✓ All Myos connected successfully!")

@@ -109,6 +109,7 @@ def disconnect():
 @app.route('/classify')
 def classify():
     """Perform gesture classification"""
+    """burada neden sensor datayı gönderiyoruz??????"""
     if _system is None:
         return jsonify({
             "status": "error",
@@ -142,6 +143,9 @@ def classify():
 @app.route('/setcw')
 def setcw():
     """Save calibration sample for a gesture"""
+    """şimdi calibrasyon sayfasında verileri göstermek için /data kullanıyoruz belli bir intervalde çağırarak
+    aynı şekilde calibrationu da belli bir intervalde çağırarak kullanıyorduk 
+    ? bu sistem 1 defa calibrate endpointine gittiğinde ne kadar data kaydediyor Calibrationduration kadar mı ?"""
     if _system is None:
         return jsonify({
             "status": "error",
