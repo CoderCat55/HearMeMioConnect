@@ -162,24 +162,12 @@ class GestureSystem:
             
             return False
 
-
-        """
-        # burası??
-        if not self.data_process.is_alive():
-            print("ERROR: Data acquisition process failed to start!")
-            print("Check if Myo dongle is connected and MyoConnect is closed")
-            return False
-        
-        print("Data acquisition process started successfully!")
-        return True
-        """
-    
     def stop_data_acquisition(self):
         """Stop the data acquisition process"""
         if self.data_process is not None and self.data_process.is_alive():
             print("Stopping data acquisition...")
             self.data_process.terminate()
-            self.data_process.join(timeout=5)
+            self.data_process.join(timeout=5) #buradaki timeout ne için
             self.data_process = None
             print("Data acquisition stopped.")
     

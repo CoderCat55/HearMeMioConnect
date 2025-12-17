@@ -17,9 +17,11 @@ Also we need to get data not using connection id we need to get data with device
 *************************
 
 My aim:
-I have a webserver.py
-in main.py it should first initialize server process and server process will be going on until ctrl c
-when connect endpoint is accessed we should initialiize data aqusiiton process
+to write a webserver.py which can integrate to other parts of this code in harmony 
+
+The problems:
+I need to send json datas with /data endpoint with current datas from shared memory. Note: Do not effect shared memory
+
 
 RULES:
 Please really read all the code. 
@@ -29,6 +31,7 @@ While giving ansswers include the chain of thought, why did you make that assump
 Your aim is to discuss the structure with me. I need you to be objective. You should use strategies like listing pros and cons of a situation and judge it according to my aim.
 
 When change of code only change what is relevant do not try to change anything that is not relevant with my aim.
+I need to know which parts you have made changes tell me because sometimes you change something inside a fucntion which I am not aware of.
 
 
 

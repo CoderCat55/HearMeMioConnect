@@ -33,7 +33,7 @@ sensor_data = {
     'maremg4': 0, 'maremg5': 0, 'maremg6': 0, 'maremg7': 0,
     'marax': 0, 'maray': 0, 'maraz': 0, 'margx': 0, 'margy': 0, 
     'margz': 0, 'marroll': 0, 'maryaw': 0, 'marpitch': 0,
-    'cr': 0,      # Classification result
+    #'cr': 0,      # Classification result
     'calword': 0,
     'connections': 0
 }
@@ -109,7 +109,8 @@ def disconnect():
 @app.route('/classify')
 def classify():
     """Perform gesture classification"""
-    """burada neden sensor datayı gönderiyoruz??????"""
+    """burada neden sensor datayı gönderiyoruz?????? cr yi göndermek için"""
+    """aslında sensor datada cr ye ihtiyacımız yok direkt olarak cryi gönderebiliriz muhtemelen"""
     if _system is None:
         return jsonify({
             "status": "error",
@@ -131,12 +132,12 @@ def classify():
         }), 500
     
     # Update sensor_data for compatibility
-    sensor_data['cr'] = result
+    #sensor_data['cr'] = result
     
     return jsonify({
         "status": "success",
-        "gesture": result,
-        "sensor_data": sensor_data
+        "cr": result,
+        #"sensor_data": sensor_data
     })
 
 
@@ -144,8 +145,9 @@ def classify():
 def setcw():
     """Save calibration sample for a gesture"""
     """şimdi calibrasyon sayfasında verileri göstermek için /data kullanıyoruz belli bir intervalde çağırarak
-    aynı şekilde calibrationu da belli bir intervalde çağırarak kullanıyorduk 
-    ? bu sistem 1 defa calibrate endpointine gittiğinde ne kadar data kaydediyor Calibrationduration kadar mı ?"""
+    aynı şekilde calibrationu da belli bir intervalde çağırarak kullanıyorduk  bunu artık bir zaman serisinikaydetmek için kullanacağız
+    yani kalibrasyon her çağrıldığında aslında 3snlik bir veri kaydedicek calibrastionu çağırmadan araya 5snlik bekleme koyabiiliriz
+    ? bu sistem 1 defa calibrate endpointine gittiğinde ne kadar data kaydediyor Calibrationduration kadar mı ? evet"""
     if _system is None:
         return jsonify({
             "status": "error",
@@ -218,12 +220,15 @@ def status():
         }), 500
     
     return jsonify({
-        "data_acquisition_running": _system.is_data_acquisition_running(),
-        "model_trained": _system.classifier.model is not None,
-        "available_gestures": _system.classifier.gesture_labels,
-        "calibration_samples": {
-            gesture: len(samples) 
-            for gesture, samples in _system.classifier.calibration_data.items()
+        "status":"success",
+        "message": {
+            "data_acquisition_running": _system.is_data_acquisition_running(),
+            "model_trained": _system.classifier.model is not None,
+            "available_gestures": _system.classifier.gesture_labels,
+            "calibration_samples": {
+                gesture: len(samples) 
+                for gesture, samples in _system.classifier.calibration_data.items()
+            }
         }
     })
 
