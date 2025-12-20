@@ -108,7 +108,7 @@ def data():
         'margz': float(latest_sample[33]),
         
         'calword': 0,
-        'connections': 1
+        'connections': 0 #add if connections are available with myo armbands 
     }
     
     return jsonify(sensor_data)
