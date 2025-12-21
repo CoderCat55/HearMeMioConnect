@@ -36,7 +36,7 @@ sensor_data = {
     'margz': 0, 'marroll': 0, 'maryaw': 0, 'marpitch': 0,
     #'cr': 0,      # Classification result
     'calword': 0,
-    'connections': 0
+    'connections': 0 
 }
 
 
@@ -177,21 +177,16 @@ def classify():
             "message": "Data acquisition not running. Call /connect first."
         }), 400
     
-    result = _system.classify()
+    cr = _system.classify()
     
-    if result is None:
+    if cr is None:
         return jsonify({
             "status": "error",
             "message": "Classification failed"
         }), 500
-    
-    # Update sensor_data for compatibility
-    #sensor_data['cr'] = result
-    
     return jsonify({
         "status": "success",
-        "cr": result,
-        #"sensor_data": sensor_data
+        "message": cr,
     })
 
 
