@@ -227,12 +227,14 @@ def setcw():
     if success:
         return jsonify({
             "status": "success",
-            "message": f"Calibration sample saved for '{gesture_name}'"
+            "message": f"Calibration sample saved for '{gesture_name}'",
+            "nextcal":"ok"
         })
     else:
         return jsonify({
             "status": "error",
-            "message": "Calibration failed"
+            "message": "Calibration failed",
+            "nextcal":"notok"
         }), 500
 
 
