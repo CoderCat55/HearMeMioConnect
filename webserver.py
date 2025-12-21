@@ -36,7 +36,7 @@ sensor_data = {
     'margz': 0, 'marroll': 0, 'maryaw': 0, 'marpitch': 0,
     #'cr': 0,      # Classification result
     'calword': 0,
-    'connections': 0 
+    'connections': 0 #add if connections are available with myo armbands 
 }
 
 
