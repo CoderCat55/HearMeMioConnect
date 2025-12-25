@@ -92,6 +92,62 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             part2 = stream_buffer[:current_idx_wrapped]  # From beginning to current
             return np.concatenate([part1, part2])
         
+def segment_gesture(data, classifier, gesture_name):
+    """
+    Segments the active gesture from the recording based on rest data statistics.
+    Assumes the recording structure: Rest -> Active -> Rest
+    """
+    # Don't segment 'rest' gestures
+    if gesture_name.lower() == 'rest':
+        return data
+        
+    # Check if we have rest data to compare against
+    rest_key = None
+    if 'rest' in classifier.calibration_data:
+        rest_key = 'rest'
+    elif 'Rest' in classifier.calibration_data:
+        rest_key = 'Rest'
+        
+    if not rest_key or not classifier.calibration_data[rest_key]:
+        print("Warning: No 'rest' data found. Cannot segment. Saving full recording.")
+        return data
+    
+    try:
+        # Calculate threshold from rest data (Mean + 5*Std)
+        rest_data = np.concatenate(classifier.calibration_data[rest_key])
+        rest_energy = np.mean(np.abs(rest_data), axis=1)
+        threshold = np.mean(rest_energy) + 5 * np.std(rest_energy)
+        
+        # Find active segment in new data
+        data_energy = np.mean(np.abs(data), axis=1)
+        # Smooth energy
+        window = 20
+        if len(data_energy) > window:
+            data_energy_smooth = np.convolve(data_energy, np.ones(window)/window, mode='same')
+        else:
+            data_energy_smooth = data_energy
+        
+        active_indices = np.where(data_energy_smooth > threshold)[0]
+        
+        if len(active_indices) == 0:
+            print("Warning: Signal did not exceed rest threshold. Saving full recording.")
+            return data
+            
+        start_idx = active_indices[0]
+        end_idx = active_indices[-1]
+        
+        # Add padding (approx 0.15s)
+        padding = 30
+        start_idx = max(0, start_idx - padding)
+        end_idx = min(len(data), end_idx + padding)
+        
+        print(f"Segmented gesture: {start_idx}-{end_idx} (Length: {end_idx-start_idx})")
+        return data[start_idx:end_idx]
+        
+    except Exception as e:
+        print(f"Error during segmentation: {e}")
+        return data
+
 def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
               recording_gesture, classifier):
     """Called from main process when user wants to calibrate"""
@@ -129,6 +185,9 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
         print("ERROR: No data was recorded! Check if Myos are connected.")
         return
     
+    # Segment the active gesture part
+    recorded_data = segment_gesture(recorded_data, classifier, gesture_name)
+    
     # Add to classifier
     classifier.add_calibration_sample(gesture_name, recorded_data)
     
@@ -139,6 +198,57 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     np.save(f'calibration_data/{gesture_name}_{timestamp}.npy', recorded_data)
     
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
+
+def TestSegmentation(calib_buffer, calib_index, recording_flag, recording_gesture, classifier):
+    """Records a gesture and tests the segmentation logic without saving to classifier"""
+    print("Testing segmentation. Please perform: Rest -> Active -> Rest")
+    
+    # Reset calibration buffer
+    calib_index.value = 0
+    
+    # Set flag in shared memory
+    temp_name = "test_segment"
+    gesture_bytes = temp_name.encode('utf-8')
+    for i, byte in enumerate(gesture_bytes[:50]):
+        recording_gesture[i] = byte
+    recording_flag.value = 1  # Start recording
+    
+    # Wait 3 seconds
+    print("Recording... ", end='', flush=True)
+    for i in range(CALIBRATION_DURATION):
+        time.sleep(1)
+        print(f"{CALIBRATION_DURATION-i}... ", end='', flush=True)
+    print("Done!")
+    
+    # Stop recording
+    recording_flag.value = 0
+    time.sleep(0.5)  # Let final batch flush
+    
+    # Read recorded data
+    recorded_data = get_calibration_buffer_from_shared_mem(calib_buffer, calib_index)
+    
+    if recorded_data is None or len(recorded_data) == 0:
+        print("ERROR: No data was recorded!")
+        return
+    
+    print(f"Original recording length: {len(recorded_data)}")
+    
+    # Segment the active gesture part
+    # We pass a dummy gesture name that isn't 'rest' so it attempts segmentation
+    segmented_data = segment_gesture(recorded_data, classifier, "test_gesture")
+    
+    if len(segmented_data) == len(recorded_data):
+        print("Result: No segmentation occurred (or full signal kept).")
+    else:
+        print(f"Result: Segmented length: {len(segmented_data)}")
+
+    # Save to disk
+    import os
+    os.makedirs('segmented_test_data', exist_ok=True)
+    timestamp = int(time.time())
+    filename = f'segmented_test_data/test_segment_{timestamp}.npy'
+    np.save(filename, segmented_data)
+    print(f"Saved segmented data to {filename}")
 
 def Classify(stream_buffer, stream_index, classifier):
     """Called from main process when user wants to classify"""
@@ -211,8 +321,11 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             print("\n")
             print("Classifying gesture...")
             LiveClassify()
+        case "sg": # segment gesture test
+            print("now will run segmentation test")
+            TestSegmentation(calib_buffer, calib_index, recording_flag, recording_gesture, classifier)
         case _:
-            print("Invalid command! Use: tr, cf, cb, or live")
+            print("Invalid command! Use: tr, cf, cb, live, or sg")
 
 if __name__ == "__main__":
     print("=== Gesture Recognition System ===")
@@ -258,7 +371,7 @@ if __name__ == "__main__":
     classifier = GestureClassifier()
     classifier.load_calibration_data()
     
-    print("\nSystem ready! Available commands: tr= train, cf =classify,cb= calibrate")
+    print("\nSystem ready! Available commands: tr= train, cf =classify, cb= calibrate, sg= segment test")
     print()
     
     # Command loop
