@@ -151,14 +151,6 @@ def segment_gesture(data, classifier, gesture_name):
 def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
               recording_gesture, classifier):
     """Called from main process when user wants to calibrate"""
-    """print(f"Calibration will start in ", end='', flush=True)
-    for i in range(CALIBRATION_STARTS, 0, -1):
-        print(f"{i}... ", end='', flush=True)
-        time.sleep(1)
-    print("\n")
-    print(f"Recording calibration for '{gesture_name}' - '{CALIBRATION_DURATION} seconds...")
-    """ 
-    #şimdilik veri toplayacağumuz için burası kapalı.
     # Reset calibration buffer
     calib_index.value = 0
     
@@ -186,6 +178,7 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
         return
     
     # Segment the active gesture part
+    original_len = len(recorded_data)
     recorded_data = segment_gesture(recorded_data, classifier, gesture_name)
     
     # Add to classifier
@@ -197,7 +190,10 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     timestamp = int(time.time())
     np.save(f'calibration_data/{gesture_name}_{timestamp}.npy', recorded_data)
     
-    print(f"Calibration complete! Saved {len(recorded_data)} samples")
+    if len(recorded_data) < original_len:
+        print(f"Calibration complete! Saved {len(recorded_data)} samples (Segmented from {original_len})")
+    else:
+        print(f"Calibration complete! Saved {len(recorded_data)} samples (Full recording)")
 
 def TestSegmentation(calib_buffer, calib_index, recording_flag, recording_gesture, classifier):
     """Records a gesture and tests the segmentation logic without saving to classifier"""
@@ -268,7 +264,7 @@ def Classify(stream_buffer, stream_index, classifier):
     print(f"Predicted gesture: {result}")
     return result
 
-def LiveClassify():
+def LiveClassify(stream_buffer, stream_index, classifier):
     """Continuously classify gestures in real-time."""
     if classifier.model is None:
         print("ERROR: Model not trained yet! Please train the model first using 'tr'.")
@@ -280,6 +276,28 @@ def LiveClassify():
         Classify(stream_buffer, stream_index, classifier)
         print("waiting1 sec for other classification")
         time.sleep(CLASSIFICATION_DURATION)
+
+def RealTimeSegmentedClassify(stream_buffer, stream_index, classifier):
+    """Classify with real-time segmentation based on rest samples"""
+    print(f"Classify will start in ", end='', flush=True)
+    for i in range(CLASSIFICATION_STARTS, 0, -1):
+        print(f"{i}... ", end='', flush=True)
+        time.sleep(1)
+    print("\n")
+    print("Classifying gesture...")
+    
+    time.sleep(CLASSIFICATION_DURATION)
+    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
+    
+    if current_data is None or len(current_data) < 10:
+        print("ERROR: Not enough data to classify!")
+        return None
+        
+    segmented_data = segment_gesture(current_data, classifier, "live_segment")
+    features = GestureClassifier.extract_features(segmented_data)
+    result = classifier.classify(features)
+    print(f"Predicted gesture (Segmented): {result}")
+    return result
 
 def Train(classifier):
     """Called from main process when user wants to train"""
@@ -320,12 +338,15 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
                 time.sleep(1)
             print("\n")
             print("Classifying gesture...")
-            LiveClassify()
+            LiveClassify(stream_buffer, stream_index, classifier)
         case "sg": # segment gesture test
             print("now will run segmentation test")
             TestSegmentation(calib_buffer, calib_index, recording_flag, recording_gesture, classifier)
+        case "sc": # segmented classify
+            print("now will run segmented classify function")
+            RealTimeSegmentedClassify(stream_buffer, stream_index, classifier)
         case _:
-            print("Invalid command! Use: tr, cf, cb, live, or sg")
+            print("Invalid command! Use: tr, cf, cb, live, sg, or sc")
 
 if __name__ == "__main__":
     print("=== Gesture Recognition System ===")
@@ -371,7 +392,7 @@ if __name__ == "__main__":
     classifier = GestureClassifier()
     classifier.load_calibration_data()
     
-    print("\nSystem ready! Available commands: tr= train, cf =classify, cb= calibrate, sg= segment test")
+    print("\nSystem ready! Available commands: tr= train, cf =classify, cb= calibrate, sg= segment test, sc= segmented classify")
     print()
     
     # Command loop
