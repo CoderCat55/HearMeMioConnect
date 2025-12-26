@@ -9,11 +9,11 @@ import time
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
 CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
 
-CALIBRATION_DURATION = 3  # seconds
-CLASSIFICATION_DURATION = 3  # same!
+CALIBRATION_DURATION = 3  # seconds #no longer needed
+CLASSIFICATION_DURATION = 3  # same! #no longer needed
 
-CALIBRATION_STARTS = 5 #no longer needed
-CLASSIFICATION_STARTS = 5 #no longer needed
+CALIBRATION_STARTS = 5 
+CLASSIFICATION_STARTS = 5 
 
 is_running = False
 
@@ -143,11 +143,11 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
 
 def Classify(stream_buffer, stream_index, classifier):
-    model1windowSize = 20   #daha yavaş
-    model2windowSize = 100  #daha hızlı
+    model1windowSize = 20  #in ms  #daha yavaş
+    model2windowSize = 100 #in ms #daha hızlı
     """Called from main process when user wants to classify"""
     """ while is_running True
-            check if the gesture is rest  with restmodel(model 1) windowSize 20ms 
+            check if the gesture is rest  with restmodel(model 1) windowSize 20ms  bu modeli hangi data ile eğiteceğiz.
             if gesture != rest
                 do feature things 
                 run classifymodel(model 2) window size 100 ms Not: bu modelin eğitilmiş olması için eski dataların rest kısımlarının kesilmesi lazım değil mi?
@@ -155,27 +155,24 @@ def Classify(stream_buffer, stream_index, classifier):
     sampling rate i biliyorsak zaten 20 sample olacak şekilde zaman hesabı yapabilir miyiz? 
     
     """
-    def fe(series):
-        return((np.mean(series)),np.std(series))
-    
+    #burada 2 farklı model kullanacağımız için model.py'yi silip tüm fonksiyonları buraya eklemek daha mı mantıklı olur?
+
     while is_running :
         #read 20 sample
-        #do feature extraction/engineering
-        samples_read = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
-        samples= fe(samples_read)
+        #do feature engineering
+        samples_read = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds= model1windowSize/1000)
+        samples= classifier.extract_features(samples_read)
         print("etwas")  
         if model1.predict(samples):
             #it means rest positon
             continue
         #if not rest position
-    
-    # Extract features
-    features = GestureClassifier.extract_features(current_data)
-    
-    # Classify
-    result = classifier.classify(features)
-    print(f"Predicted gesture: {result}")
-    return result
+        new_samples_read = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=model2windowSize/1000)
+        new_samples = GestureClassifier.extract_features(samples_read)
+        # Classify
+        result = classifier.classify(new_samples)
+        print(f"Predicted gesture: {result}")
+        return result
 
 def Train(classifier):
     """Called from main process when user wants to train"""

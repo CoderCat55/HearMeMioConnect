@@ -22,6 +22,7 @@ class GestureClassifier:
         Extract statistical features from time series
         time_series_data shape: (time_steps, 34) - time series from both myos
         Returns: 1D feature vector
+        hangi featureların çıkarılacağını buraya yazıyoruz 
         """
         features = []
         
