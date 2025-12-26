@@ -147,9 +147,9 @@ def Classify(stream_buffer, stream_index, classifier):
     model2windowSize = 100 #in ms #daha hızlı
     """Called from main process when user wants to classify"""
     """ while is_running True
-            check if the gesture is rest  with restmodel(model 1) windowSize 20ms  bu modeli hangi data ile eğiteceğiz.
+            check if the gesture is rest  with restmodel(model 1) which is a svm model  windowSize 20ms  bu modeli hangi data ile eğiteceğiz.
             if gesture != rest
-                do feature things 
+                do feature engineering  
                 run classifymodel(model 2) window size 100 ms Not: bu modelin eğitilmiş olması için eski dataların rest kısımlarının kesilmesi lazım değil mi?
     Hocanın yazdığı yerde 20 sample diyor yani son 20 örnek oluyor sanırım ms olarak hesaplamıyoruz mu o zaman? yoksa sample ms'ye mi karşılık geliyor? 
     sampling rate i biliyorsak zaten 20 sample olacak şekilde zaman hesabı yapabilir miyiz? 
@@ -163,7 +163,7 @@ def Classify(stream_buffer, stream_index, classifier):
         samples_read = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds= model1windowSize/1000)
         samples= classifier.extract_features(samples_read)
         print("etwas")  
-        if model1.predict(samples):
+        if model1.predict(samples):    #model1 is not defined 
             #it means rest positon
             continue
         #if not rest position
