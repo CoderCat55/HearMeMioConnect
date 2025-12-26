@@ -12,8 +12,10 @@ CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
 CALIBRATION_DURATION = 3  # seconds
 CLASSIFICATION_DURATION = 3  # same!
 
-CALIBRATION_STARTS = 5
-CLASSIFICATION_STARTS = 5
+CALIBRATION_STARTS = 5 #no longer needed
+CLASSIFICATION_STARTS = 5 #no longer needed
+
+is_running = False
 
 def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index, 
                             calib_index, recording_flag, recording_gesture):
@@ -141,12 +143,27 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
 
 def Classify(stream_buffer, stream_index, classifier):
+    model1windowSize = 20   #daha yavaş
+    model2windowSize = 100  #daha hızlı
     """Called from main process when user wants to classify"""
-    time.sleep(CLASSIFICATION_DURATION)
-    # Read current data from shared memory (last 1 second)
+    """ while is_running True
+            check if the gesture is rest  with restmodel(model 1) windowSize 20ms 
+            if gesture != rest
+                do feature things 
+                run classifymodel(model 2) window size 100 ms Not: bu modelin eğitilmiş olması için eski dataların rest kısımlarının kesilmesi lazım değil mi?
+    Hocanın yazdığı yerde 20 sample diyor yani son 20 örnek oluyor sanırım ms olarak hesaplamıyoruz mu o zaman? yoksa sample ms'ye mi karşılık geliyor? 
+    sampling rate i biliyorsak zaten 20 sample olacak şekilde zaman hesabı yapabilir miyiz? 
+    
+    """
+    while is_running :
+        print("etwas")
+
+
+    time.sleep(CLASSIFICATION_DURATION) #not needed anymore
+    # Read current data from shared memory burası son 20 sample mi olacak burası değişecek
     current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
     
-    if current_data is None or len(current_data) < 10:
+    if current_data is None or len(current_data) < 10: # burası gerekli mi?
         print("ERROR: Not enough data to classify!")
         return None
     
@@ -157,19 +174,6 @@ def Classify(stream_buffer, stream_index, classifier):
     result = classifier.classify(features)
     print(f"Predicted gesture: {result}")
     return result
-
-def LiveClassify():
-    """Continuously classify gestures in real-time."""
-    if classifier.model is None:
-        print("ERROR: Model not trained yet! Please train the model first using 'tr'.")
-        return
-
-    print("\n>>> Starting LIVE classification... classify fo 20 times <<<")
-    for i in range(1,20,1):
-        print(f"\nClassification {i}/20:")
-        Classify(stream_buffer, stream_index, classifier)
-        print("waiting1 sec for other classification")
-        time.sleep(CLASSIFICATION_DURATION)
 
 def Train(classifier):
     """Called from main process when user wants to train"""
@@ -202,15 +206,12 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             gesture_name = input("Which gesture would you like to calibrate? ")
             Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
                      recording_gesture, classifier)
-        case "live": # live classification
-            print("now will run live classify function")
-            print(f"Classify will start in ", end='', flush=True)
-            for i in range(CLASSIFICATION_STARTS, 0, -1):
-                print(f"{i}... ", end='', flush=True)
-                time.sleep(1)
-            print("\n")
-            print("Classifying gesture...")
-            LiveClassify()
+        case "startcf":
+            print("starting classification")
+            is_running = True
+        case "stopcf":
+            print("stopping classification")
+            is_running = False
         case _:
             print("Invalid command! Use: tr, cf, cb, or live")
 
