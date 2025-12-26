@@ -153,6 +153,7 @@ def Classify(stream_buffer, stream_index, classifier):
                 run classifymodel(model 2) window size 100 ms Not: bu modelin eğitilmiş olması için eski dataların rest kısımlarının kesilmesi lazım değil mi?
     Hocanın yazdığı yerde 20 sample diyor yani son 20 örnek oluyor sanırım ms olarak hesaplamıyoruz mu o zaman? yoksa sample ms'ye mi karşılık geliyor? 
     sampling rate i biliyorsak zaten 20 sample olacak şekilde zaman hesabı yapabilir miyiz? 
+    sample ms 'ye karşılık geliyor :D
     
     """
     #burada 2 farklı model kullanacağımız için model.py'yi silip tüm fonksiyonları buraya eklemek daha mı mantıklı olur?
