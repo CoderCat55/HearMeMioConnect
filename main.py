@@ -155,17 +155,19 @@ def Classify(stream_buffer, stream_index, classifier):
     sampling rate i biliyorsak zaten 20 sample olacak şekilde zaman hesabı yapabilir miyiz? 
     
     """
-    while is_running :
-        print("etwas")
-
-
-    time.sleep(CLASSIFICATION_DURATION) #not needed anymore
-    # Read current data from shared memory burası son 20 sample mi olacak burası değişecek
-    current_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
+    def fe(series):
+        return((np.mean(series)),np.std(series))
     
-    if current_data is None or len(current_data) < 10: # burası gerekli mi?
-        print("ERROR: Not enough data to classify!")
-        return None
+    while is_running :
+        #read 20 sample
+        #do feature extraction/engineering
+        samples_read = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION)
+        samples= fe(samples_read)
+        print("etwas")  
+        if model1.predict(samples):
+            #it means rest positon
+            continue
+        #if not rest position
     
     # Extract features
     features = GestureClassifier.extract_features(current_data)
