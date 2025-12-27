@@ -40,11 +40,16 @@ class RestModel:
         rest_data_list: list of numpy arrays, each shape (time_steps, 34)
         """
         print("Extracting features from rest data with sliding windows...")
+        print(f"[DEBUG] Number of rest samples: {len(rest_data_list)}")
+        
         X = []
         
-        for rest_sample in rest_data_list:
+        for sample_idx, rest_sample in enumerate(rest_data_list):
+            print(f"[DEBUG] Rest sample {sample_idx}: shape {rest_sample.shape}")
+            
             # Slide window with 50% overlap
             num_windows = (len(rest_sample) - self.samples_per_window) // self.stride + 1
+            print(f"[DEBUG]   -> {num_windows} windows")
             
             for i in range(num_windows):
                 start_idx = i * self.stride
@@ -55,16 +60,32 @@ class RestModel:
                 X.append(features)
         
         X = np.array(X)
+        print(f"[DEBUG] Total training windows: {len(X)}")
+        print(f"[DEBUG] Feature vector shape: {X.shape}")
         print(f"Training RestModel on {len(X)} windows from rest data...")
         
         # Normalize features
         X_scaled = self.scaler.fit_transform(X)
         
+        print(f"[DEBUG] Feature statistics after scaling:")
+        print(f"[DEBUG]   Mean: {np.mean(X_scaled):.4f}")
+        print(f"[DEBUG]   Std: {np.std(X_scaled):.4f}")
+        print(f"[DEBUG]   Min: {np.min(X_scaled):.4f}")
+        print(f"[DEBUG]   Max: {np.max(X_scaled):.4f}")
+        
         # Train One-Class SVM
         self.model.fit(X_scaled)
         print("RestModel training complete!")
+        
+        # Test prediction on training data to see how many are classified as rest
+        predictions = self.model.predict(X_scaled)
+        inliers = np.sum(predictions == 1)
+        outliers = np.sum(predictions == -1)
+        print(f"[DEBUG] Self-test on training data:")
+        print(f"[DEBUG]   Inliers (rest): {inliers}/{len(predictions)} ({inliers/len(predictions)*100:.1f}%)")
+        print(f"[DEBUG]   Outliers (not rest): {outliers}/{len(predictions)} ({outliers/len(predictions)*100:.1f}%)")
+        
         return True
-    
     def is_rest(self, features):
         """
         Predict if features represent rest position

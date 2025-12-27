@@ -16,11 +16,20 @@ def segment_gesture_file(gesture_data, rest_model, min_segment_length_ms=100):
     """
     min_samples = int((min_segment_length_ms / 1000) * rest_model.sampling_rate)
     
+    print(f"\n    [DEBUG] Input data shape: {gesture_data.shape}")
+    print(f"    [DEBUG] Window size: {rest_model.samples_per_window} samples")
+    print(f"    [DEBUG] Stride: {rest_model.stride} samples")
+    print(f"    [DEBUG] Min segment length: {min_samples} samples ({min_segment_length_ms}ms)")
+    
     # Slide 20ms window through data with 50% overlap
     num_windows = (len(gesture_data) - rest_model.samples_per_window) // rest_model.stride + 1
+    print(f"    [DEBUG] Number of windows to process: {num_windows}")
     
     # Predict rest/non-rest for each window
     predictions = []
+    rest_count = 0
+    non_rest_count = 0
+    
     for i in range(num_windows):
         start_idx = i * rest_model.stride
         end_idx = start_idx + rest_model.samples_per_window
@@ -29,34 +38,64 @@ def segment_gesture_file(gesture_data, rest_model, min_segment_length_ms=100):
         features = rest_model.extract_features(window)
         is_rest = rest_model.is_rest(features)
         predictions.append((start_idx, end_idx, is_rest))
+        
+        if is_rest:
+            rest_count += 1
+        else:
+            non_rest_count += 1
+    
+    print(f"    [DEBUG] Predictions - Rest: {rest_count}, Non-rest: {non_rest_count}")
+    
+    # Print first 10 and last 10 predictions to see pattern
+    print(f"    [DEBUG] First 10 predictions: {['R' if p[2] else 'G' for p in predictions[:10]]}")
+    print(f"    [DEBUG] Last 10 predictions: {['R' if p[2] else 'G' for p in predictions[-10:]]}")
     
     # Find continuous non-rest segments
     segments = []
     current_segment_start = None
+    segment_id = 0
     
-    for start_idx, end_idx, is_rest in predictions:
+    for idx, (start_idx, end_idx, is_rest) in enumerate(predictions):
         if not is_rest:  # Non-rest window
             if current_segment_start is None:
                 current_segment_start = start_idx
+                print(f"    [DEBUG] Segment {segment_id} START at window {idx} (sample {start_idx})")
         else:  # Rest window
             if current_segment_start is not None:
                 # End of non-rest segment
                 segment_data = gesture_data[current_segment_start:end_idx]
+                segment_length = len(segment_data)
+                
+                print(f"    [DEBUG] Segment {segment_id} END at window {idx} (sample {end_idx})")
+                print(f"    [DEBUG]   -> Length: {segment_length} samples ({segment_length/rest_model.sampling_rate*1000:.1f}ms)")
                 
                 # Only keep if long enough
-                if len(segment_data) >= min_samples:
+                if segment_length >= min_samples:
                     segments.append(segment_data)
+                    print(f"    [DEBUG]   -> ✓ KEPT (>= {min_samples} samples)")
+                else:
+                    print(f"    [DEBUG]   -> ✗ DISCARDED (< {min_samples} samples)")
                 
                 current_segment_start = None
+                segment_id += 1
     
     # Handle case where file ends with non-rest
     if current_segment_start is not None:
         segment_data = gesture_data[current_segment_start:]
-        if len(segment_data) >= min_samples:
+        segment_length = len(segment_data)
+        
+        print(f"    [DEBUG] Segment {segment_id} END at file end (sample {len(gesture_data)})")
+        print(f"    [DEBUG]   -> Length: {segment_length} samples ({segment_length/rest_model.sampling_rate*1000:.1f}ms)")
+        
+        if segment_length >= min_samples:
             segments.append(segment_data)
+            print(f"    [DEBUG]   -> ✓ KEPT (>= {min_samples} samples)")
+        else:
+            print(f"    [DEBUG]   -> ✗ DISCARDED (< {min_samples} samples)")
+    
+    print(f"    [DEBUG] Total segments found: {len(segments)}")
     
     return segments
-
 def segment_participant_data(participant_id, rest_model):
     """
     Process all gesture files for one participant
