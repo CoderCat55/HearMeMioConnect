@@ -24,6 +24,16 @@ My aim:
 SO I need this procedure for all participant their folders are named as follows: p1,p2,p3,p4,p5,p6 and p1rest,p2rest.....
 This procedure will be done between same participant with this I mean segment p3 data with p3rest, not p3 data with p4rest
 I need detailed plan on how would you implement this.
+Use Case 1: Offline Segmentation (segment_gestures.py)
+Purpose: Prepare your old collected data
+Approach: Participant-specific (Option B)Each participant's gesture data is segmented using only their own rest data:
+
+p1 gestures segmented with p1rest
+p2 gestures segmented with p2rest
+p3 gestures segmented with p3rest
+etc.
+Reasoning: Your old data was collected per participant, so each person's rest posture should be used to clean their own gesture data.
+
 
 for classification details :
 while is_running True

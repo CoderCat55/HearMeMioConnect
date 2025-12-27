@@ -4,24 +4,6 @@ import glob
 import os
 from rest_model import RestModel
 
-def load_all_rest_data():
-    """Load rest data from all participants (p1rest to p6rest)"""
-    rest_data = []
-    
-    for participant_id in range(1, 7):
-        folder = f'calibration_data/p{participant_id}rest'
-        if not os.path.exists(folder):
-            print(f"Warning: {folder} not found, skipping...")
-            continue
-        
-        files = glob.glob(f'{folder}/*.npy')
-        for file in files:
-            data = np.load(file)
-            rest_data.append(data)
-            print(f"Loaded rest data: {file} with shape {data.shape}")
-    
-    return rest_data
-
 def segment_gesture_file(gesture_data, rest_model, min_segment_length_ms=100):
     """
     Segment a single gesture file by removing rest periods
@@ -80,7 +62,7 @@ def segment_participant_data(participant_id, rest_model):
     Process all gesture files for one participant
     
     participant_id: 1-6
-    rest_model: trained RestModel
+    rest_model: trained RestModel (participant-specific)
     """
     input_folder = f'calibration_data/p{participant_id}'
     output_folder = f'calibration_data/p{participant_id}new'
@@ -121,30 +103,50 @@ def segment_participant_data(participant_id, rest_model):
     print(f"Participant {participant_id} complete: {total_segments} total segments saved to {output_folder}")
 
 def main():
-    print("=== Gesture Segmentation Script ===")
-    print("Step 1: Loading all rest data (p1rest to p6rest)...")
+    print("=== Gesture Segmentation Script (Participant-Specific) ===")
+    print("This will segment each participant's data using their own rest data")
+    print()
     
-    rest_data = load_all_rest_data()
-    
-    if len(rest_data) == 0:
-        print("Error: No rest data found!")
-        return
-    
-    print(f"Loaded {len(rest_data)} rest samples")
-    
-    print("\nStep 2: Training RestModel...")
-    rest_model = RestModel(window_size_ms=20, sampling_rate=200)
-    rest_model.train(rest_data)
-    
-    # Save rest model
-    rest_model.save_model('rest_model.pkl')
-    
-    print("\nStep 3: Segmenting gesture data for all participants...")
     for participant_id in range(1, 7):
+        print(f"\n{'='*60}")
+        print(f"PARTICIPANT {participant_id}")
+        print(f"{'='*60}")
+        
+        # Load THIS participant's rest data only
+        rest_folder = f'calibration_data/p{participant_id}rest'
+        if not os.path.exists(rest_folder):
+            print(f"❌ Error: {rest_folder} not found! Skipping participant {participant_id}")
+            continue
+        
+        rest_data = []
+        files = glob.glob(f'{rest_folder}/*.npy')
+        
+        if len(files) == 0:
+            print(f"❌ No rest data files found in {rest_folder}, skipping...")
+            continue
+        
+        print(f"Loading rest data from {rest_folder}...")
+        for file in files:
+            data = np.load(file)
+            rest_data.append(data)
+            print(f"  ✓ Loaded: {os.path.basename(file)} (shape: {data.shape})")
+        
+        print(f"\nTraining RestModel for participant {participant_id} on {len(rest_data)} rest samples...")
+        rest_model = RestModel(window_size_ms=20, sampling_rate=200)
+        rest_model.train(rest_data)
+        
+        # Save participant-specific rest model
+        rest_model.save_model(f'rest_model_p{participant_id}.pkl')
+        print(f"✓ Saved rest_model_p{participant_id}.pkl")
+        
+        # Segment THIS participant's gesture data
         segment_participant_data(participant_id, rest_model)
     
-    print("\n=== Segmentation Complete! ===")
+    print("\n" + "="*60)
+    print("=== Segmentation Complete! ===")
+    print("="*60)
     print("New segmented data saved in calibration_data/p{X}new/ folders")
+    print("Participant-specific rest models saved as rest_model_p{X}.pkl")
 
 if __name__ == "__main__":
     main()

@@ -228,31 +228,36 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
         last_position = current_position
 
 def Train():
-    """Train both models"""
+    """Train both models - RestModel on ALL participants, GestureModel on segmented data"""
     import glob
+    import os
     
     print("=== Training Models ===")
     
-    # Train RestModel
-    print("\n1. Training RestModel...")
+    # Train RestModel on ALL participants' rest data (combined)
+    print("\n1. Training RestModel on ALL participants' rest data...")
     rest_data = []
     for participant_id in range(1, 7):
         folder = f'calibration_data/p{participant_id}rest'
         if os.path.exists(folder):
             files = glob.glob(f'{folder}/*.npy')
             for file in files:
-                rest_data.append(np.load(file))
+                data = np.load(file)
+                rest_data.append(data)
+                print(f"  ✓ Loaded: {os.path.basename(file)} from participant {participant_id}")
     
     if len(rest_data) == 0:
         print("ERROR: No rest data found!")
         return False
     
+    print(f"\nTraining on {len(rest_data)} rest samples from all participants...")
     rest_model = RestModel(window_size_ms=20, sampling_rate=200)
     rest_model.train(rest_data)
     rest_model.save_model('rest_model.pkl')
+    print("✓ RestModel saved as rest_model.pkl (for real-time use)")
     
-    # Train GestureModel
-    print("\n2. Training GestureModel...")
+    # Train GestureModel on segmented data from pXnew folders
+    print("\n2. Training GestureModel on segmented gesture data...")
     gesture_data = {}
     for participant_id in range(1, 7):
         folder = f'calibration_data/p{participant_id}new'
@@ -272,13 +277,20 @@ def Train():
     
     if len(gesture_data) < 2:
         print("ERROR: Need at least 2 gestures in pXnew folders!")
+        print("Please run segment_gestures.py first to create pXnew folders")
         return False
+    
+    print(f"Found {len(gesture_data)} gesture types:")
+    for gesture_name, samples in gesture_data.items():
+        print(f"  - {gesture_name}: {len(samples)} samples")
     
     gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
     gesture_model.train(gesture_data)
     gesture_model.save_model('gesture_model.pkl')
+    print("✓ GestureModel saved as gesture_model.pkl")
     
     print("\n=== Training Complete! ===")
+    print("Models ready for real-time classification")
     return True
 
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
