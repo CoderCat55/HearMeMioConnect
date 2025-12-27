@@ -141,7 +141,8 @@ def segment_participant_data(participant_id, rest_model):
     
     print(f"Participant {participant_id} complete: {total_segments} total segments saved to {output_folder}")
 
-def main():
+def main(nu_value=0.01):
+    #nu valuesu düşürse daha çok rest görmemiz lazım
     print("=== Gesture Segmentation Script (Participant-Specific) ===")
     print("This will segment each participant's data using their own rest data")
     print()
@@ -170,12 +171,12 @@ def main():
             rest_data.append(data)
             print(f"  ✓ Loaded: {os.path.basename(file)} (shape: {data.shape})")
         
-        print(f"\nTraining RestModel for participant {participant_id} on {len(rest_data)} rest samples...")
-        rest_model = RestModel(window_size_ms=20, sampling_rate=200)
+        print(f"\nTraining RestModel for participant {participant_id} with nu={nu_value}...")
+        rest_model = RestModel(window_size_ms=20, sampling_rate=200, nu=nu_value)  # Pass nu
         rest_model.train(rest_data)
         
-        # Save participant-specific rest model
-        rest_model.save_model(f'rest_model_p{participant_id}.pkl')
+        # Save with nu in filename
+        rest_model.save_model(f'rest_model_p{participant_id}_nu{nu_value}.pkl')
         print(f"✓ Saved rest_model_p{participant_id}.pkl")
         
         # Segment THIS participant's gesture data
