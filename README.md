@@ -33,9 +33,9 @@ while is_running True
                 run classifymodel(model 2) window size 100 ms 
 
 we will have 2 models which they will need seperate classes restmodel and classifymodel class:
-model1(the rest model) will be one-class SVM calibration_data/pXrest (X being participant number [1,6]) as rest class.
+model1(the rest model) will be one-class SVM calibration_data/pXrest (X being participant number 1 from 6 (all the participants )) as rest class.
 
-model2(the classification model) will be trained on calibration_data/pXnew (X being participant number [1,6]) each gesture name as a class.
+model2(the classification model) will be trained on calibration_data/pXnew (X being participant number 1 from 6 (all the participants ) each gesture name as a class.
 
 
 classification and commanding should run simulteneusly so I can start-stop classsification. I would prefer multiprocessing.
