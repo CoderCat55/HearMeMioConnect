@@ -1,0 +1,211 @@
+"""
+Gesture Processor (Hareket İşleyici)
+------------------------------------
+Bu script, 'calibration_data' klasörü altındaki (p1, p2, p3...) tüm klasörleri tarar.
+1. Dosya isminde 'rest' geçen dosyaları bulur ve gürültü eşik değerini (threshold) hesaplar.
+2. 'rest' olmayan diğer dosyalardaki aktif hareketleri bu eşik değerine göre kesip çıkarır.
+3. Sonuçları 'processed_data' klasörüne, orijinal klasör yapısını koruyarak kaydeder.
+"""
+
+import numpy as np
+import os
+
+# ==============================================================================
+# AYARLAR
+# ==============================================================================
+
+# Proje ana dizini (Bu dosyanın bulunduğu yer)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Verilerin bulunduğu ana klasör (p1, p2... bunun altında olmalı)
+CALIBRATION_DIR = os.path.join(BASE_DIR, "calibration_data")
+
+# İşlenmiş verilerin kaydedileceği klasör
+OUTPUT_DIR = os.path.join(BASE_DIR, "processed_data")
+
+# Analiz Parametreleri
+WINDOW_SIZE = 20        # Kayan pencere boyutu
+THRESHOLD_FACTOR = 3.0  # Gürültü eşiği çarpanı (Ortalama + 3 * StdSapma)
+MIN_DURATION = 20       # Minimum hareket uzunluğu
+PADDING = 20            # Hareketin başına/sonuna eklenecek pay
+
+# ==============================================================================
+
+class GestureProcessor:
+    def __init__(self, window_size=20, threshold_factor=3.0, min_duration=20, padding=20):
+        self.window_size = window_size
+        self.threshold_factor = threshold_factor
+        self.min_duration = min_duration
+        self.padding = padding
+        self.threshold = None
+
+    def calculate_threshold(self, root_dir):
+        """
+        Verilen klasör ve alt klasörlerindeki isminde 'rest' geçen npy dosyalarını bulur
+        ve genel gürültü seviyesini hesaplar.
+        """
+        print(f"Rest dosyaları aranıyor: {root_dir}")
+        rest_files = []
+        
+        # Recursive olarak tüm alt klasörleri gez
+        for root, dirs, files in os.walk(root_dir):
+            for file in files:
+                if file.endswith(".npy") and "rest" in file.lower():
+                    full_path = os.path.join(root, file)
+                    rest_files.append(full_path)
+        
+        if not rest_files:
+            print("HATA: Hiç 'rest' dosyası bulunamadı! Dosya isimlerinde 'rest' geçtiğinden emin olun.")
+            return False
+            
+        print(f"Bulunan rest dosyası sayısı: {len(rest_files)}")
+        
+        all_energies = []
+        for f in rest_files:
+            data = self._load_and_extract_data(f)
+            if data is not None:
+                energy = self._compute_sliding_energy(data)
+                all_energies.append(energy)
+        
+        if not all_energies:
+            print("Hata: Rest dosyalarından veri okunamadı.")
+            return False
+
+        # Tüm rest verilerini birleştirip istatistik çıkar
+        full_rest_energy = np.concatenate(all_energies)
+        mean_noise = np.mean(full_rest_energy)
+        std_noise = np.std(full_rest_energy)
+        
+        self.threshold = mean_noise + (self.threshold_factor * std_noise)
+        
+        print(f"--- Kalibrasyon Tamamlandı ---")
+        print(f"Ortalama Gürültü: {mean_noise:.4f}")
+        print(f"Standart Sapma  : {std_noise:.4f}")
+        print(f"Hesaplanan Eşik : {self.threshold:.4f}")
+        return True
+
+    def process_dataset(self, input_root, output_root):
+        """
+        Verilen klasördeki tüm dosyaları gezer, rest olmayanları işler ve
+        output_root altına aynı klasör yapısıyla kaydeder.
+        """
+        if self.threshold is None:
+            print("Hata: Threshold hesaplanmadı.")
+            return
+
+        print(f"\nVeriler işleniyor: {input_root} -> {output_root}")
+        
+        count_processed = 0
+        
+        for root, dirs, files in os.walk(input_root):
+            for file in files:
+                if file.endswith(".npy"):
+                    # Rest dosyalarını atla (onlar sadece kalibrasyon içindi)
+                    if "rest" in file.lower():
+                        continue
+                    
+                    # Dosya yollarını ayarla
+                    input_path = os.path.join(root, file)
+                    
+                    # Klasör yapısını koruyarak hedef yolu oluştur (örn: processed_data/p1/)
+                    relative_path = os.path.relpath(root, input_root)
+                    target_dir = os.path.join(output_root, relative_path)
+                    
+                    if not os.path.exists(target_dir):
+                        os.makedirs(target_dir)
+                        
+                    # Dosyayı işle
+                    self._process_single_file(input_path, target_dir)
+                    count_processed += 1
+        
+        print(f"\nToplam taranan aktif dosya sayısı: {count_processed}")
+
+    def _process_single_file(self, file_path, output_dir):
+        try:
+            data = self._load_and_extract_data(file_path)
+            if data is None:
+                return
+
+            energy = self._compute_sliding_energy(data)
+            active_mask = energy > self.threshold
+            segments = self._find_contiguous_segments(active_mask)
+            
+            base_name = os.path.splitext(os.path.basename(file_path))[0]
+            
+            if not segments:
+                print(f"Atlandı (Hareket yok): {base_name}")
+                return
+
+            saved_count = 0
+            for start, end in segments:
+                start = max(0, start - self.padding)
+                end = min(len(data), end + self.padding)
+                
+                if (end - start) < self.min_duration:
+                    continue
+                
+                gesture_data = data[start:end]
+                
+                # Dosya isimlendirme: orjinalIsim_crop_0.npy
+                if len(segments) > 1:
+                    save_name = f"{base_name}_crop_{saved_count}.npy"
+                else:
+                    save_name = f"{base_name}_cropped.npy"
+                    
+                np.save(os.path.join(output_dir, save_name), gesture_data)
+                saved_count += 1
+            
+            print(f"İşlendi: {base_name} -> {saved_count} parça kaydedildi.")
+
+        except Exception as e:
+            print(f"Hata ({file_path}): {e}")
+
+    def _load_and_extract_data(self, file_path):
+        try:
+            raw_content = np.load(file_path, allow_pickle=True)
+            if isinstance(raw_content, np.ndarray) and raw_content.ndim == 2 and np.issubdtype(raw_content.dtype, np.number):
+                return raw_content.astype(np.float32)
+            try:
+                if len(raw_content) > 0 and len(raw_content[0]) == 2 and isinstance(raw_content[0][1], (np.ndarray, list)):
+                    data_list = [x[1] for x in raw_content]
+                    return np.vstack(data_list).astype(np.float32)
+                return np.vstack(raw_content).astype(np.float32)
+            except:
+                return np.array(raw_content).astype(np.float32)
+        except:
+            return None
+
+    def _compute_sliding_energy(self, data):
+        n_cols = data.shape[1]
+        emg_cols = []
+        if n_cols >= 8: emg_cols.extend(range(0, 8))
+        if n_cols >= 25: emg_cols.extend(range(17, 25))
+        emg_data = data[:, emg_cols] if emg_cols else data
+        
+        abs_data = np.abs(emg_data)
+        mean_energy = np.mean(abs_data, axis=1)
+        window = np.ones(self.window_size) / self.window_size
+        return np.convolve(mean_energy, window, mode='same')
+
+    def _find_contiguous_segments(self, mask):
+        padded = np.concatenate(([False], mask, [False]))
+        diff = np.diff(padded.astype(int))
+        starts = np.where(diff == 1)[0]
+        ends = np.where(diff == -1)[0]
+        merged = []
+        if len(starts) > 0:
+            curr_start, curr_end = starts[0], ends[0]
+            for i in range(1, len(starts)):
+                if (starts[i] - curr_end) < self.window_size:
+                    curr_end = ends[i]
+                else:
+                    merged.append((curr_start, curr_end))
+                    curr_start, curr_end = starts[i], ends[i]
+            merged.append((curr_start, curr_end))
+        return merged
+
+if __name__ == "__main__":
+    processor = GestureProcessor(WINDOW_SIZE, THRESHOLD_FACTOR, MIN_DURATION, PADDING)
+    if processor.calculate_threshold(CALIBRATION_DIR):
+        processor.process_dataset(CALIBRATION_DIR, OUTPUT_DIR)
+        print("\n=== İşlem Tamamlandı ===")
