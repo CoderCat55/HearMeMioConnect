@@ -15,8 +15,6 @@ CLASSIFICATION_DURATION = 3  # same! #no longer needed
 CALIBRATION_STARTS = 5 
 CLASSIFICATION_STARTS = 5 
 
-is_running = False
-
 def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index, 
                             calib_index, recording_flag, recording_gesture):
     """Process 1: Continuously acquires data from Myo armbands"""
@@ -142,23 +140,21 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
 
-def Classify(stream_buffer, stream_index, classifier):
+def Classify(stream_buffer, stream_index, classifier, is_running_flag):
     model1windowSize = 20  #in ms  #daha yavaş
     model2windowSize = 100 #in ms #daha hızlı
     """Called from main process when user wants to classify"""
     """ while is_running True
-            check if the gesture is rest  with restmodel(model 1) which is a svm model  windowSize 20ms  bu modeli hangi data ile eğiteceğiz.
+            check if the gesture is rest  with restmodel(model 1) which is a svm model  windowSize 20ms  
             if gesture != rest
                 do feature engineering  
-                run classifymodel(model 2) window size 100 ms Not: bu modelin eğitilmiş olması için eski dataların rest kısımlarının kesilmesi lazım değil mi?
-    Hocanın yazdığı yerde 20 sample diyor yani son 20 örnek oluyor sanırım ms olarak hesaplamıyoruz mu o zaman? yoksa sample ms'ye mi karşılık geliyor? 
-    sampling rate i biliyorsak zaten 20 sample olacak şekilde zaman hesabı yapabilir miyiz? 
-    sample ms 'ye karşılık geliyor :D
-    
+                run classifymodel(model 2) window size 100 ms 
     """
     #burada 2 farklı model kullanacağımız için model.py'yi silip tüm fonksiyonları buraya eklemek daha mı mantıklı olur?
-
-    while is_running :
+    if is_running_flag.value == 0:
+        return None
+    
+    while is_running_flag :
         #read 20 sample
         #do feature engineering
         samples_read = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds= model1windowSize/1000)
@@ -186,7 +182,7 @@ def Train(classifier):
         print("Training failed! Make sure you have calibration data.")
 
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
-           recording_flag, recording_gesture, classifier):
+           recording_flag, recording_gesture, classifier, is_running_flag): 
     value = input("Enter your command majesty: ")
     match value:
         case "tr":  #train
@@ -208,10 +204,10 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
                      recording_gesture, classifier)
         case "startcf":
             print("starting classification")
-            is_running = True
+            is_running_flag.value = 1
         case "stopcf":
             print("stopping classification")
-            is_running = False
+            is_running_flag.value = 0
         case _:
             print("Invalid command! Use: tr, cf, cb, or live")
 
@@ -233,7 +229,8 @@ if __name__ == "__main__":
     calib_index = mp.Value('i', 0)
     recording_flag = mp.Value('i', 0)
     recording_gesture = mp.Array('c', 50)
-    
+    is_running_flag = mp.Value('i', 0)
+
     # Start data acquisition process
     data_process = Process(
         target=data_acquisition_process,
@@ -266,9 +263,10 @@ if __name__ == "__main__":
     try:
         while True:
             Command(stream_buffer, stream_index, calib_buffer, calib_index,
-                   recording_flag, recording_gesture, classifier)
+               recording_flag, recording_gesture, classifier, is_running_flag)
     except KeyboardInterrupt:
         print("\nShutting down...")
+        is_running_flag.value = 0
         data_process.terminate()
         data_process.join()
         shm_stream.close()
