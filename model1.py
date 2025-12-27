@@ -5,7 +5,7 @@ class RestDetector:
     Model 1: Energy-based segmentation model.
     Detects active gestures by comparing EMG energy against a learned noise threshold.
     """
-    def __init__(self, window_size=20, threshold_factor=3.0, min_duration=20, padding=20):
+    def __init__(self, window_size=20, threshold_factor=3.0, min_duration=20, padding=0):
         self.window_size = window_size
         self.threshold_factor = threshold_factor
         self.min_duration = min_duration
