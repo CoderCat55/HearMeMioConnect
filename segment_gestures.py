@@ -177,7 +177,7 @@ def main(nu_value=0.01):
         
         # Save with nu in filename
         rest_model.save_model(f'rest_model_p{participant_id}_nu{nu_value}.pkl')
-        print(f"✓ Saved rest_model_p{participant_id}.pkl")
+        print(f"✓ Saved rest_model_p{participant_id}_nu{nu_value}.pkl")
         
         # Segment THIS participant's gesture data
         segment_participant_data(participant_id, rest_model)
@@ -189,4 +189,7 @@ def main(nu_value=0.01):
     print("Participant-specific rest models saved as rest_model_p{X}.pkl")
 
 if __name__ == "__main__":
-    main()
+    main(0.01)
+    """# Test different nu values
+    for nu in [0.05, 0.1, 0.15, 0.2]:
+        main(nu_value=nu)"""

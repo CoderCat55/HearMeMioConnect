@@ -5,11 +5,12 @@ import numpy as np
 import pickle
 
 class RestModel:
-    def __init__(self, window_size_ms=20, sampling_rate=200):
-        self.model = svm.OneClassSVM(nu=0.1, kernel='rbf', gamma='scale')
+    def __init__(self, window_size_ms=20, sampling_rate=200, nu=0.01):  # Add nu parameter
+        self.model = svm.OneClassSVM(nu=nu, kernel='rbf', gamma='scale')  # Use the parameter
         self.scaler = StandardScaler()
         self.window_size_ms = window_size_ms
         self.sampling_rate = sampling_rate
+        self.nu = nu  # Store it
         
         # Calculate samples per window
         self.samples_per_window = int((window_size_ms / 1000) * sampling_rate)  # 4 samples
@@ -108,7 +109,8 @@ class RestModel:
             'window_size_ms': self.window_size_ms,
             'sampling_rate': self.sampling_rate,
             'samples_per_window': self.samples_per_window,
-            'stride': self.stride
+            'stride': self.stride,
+            'nu': self.nu  # Add this
         }
         with open(filepath, 'wb') as f:
             pickle.dump(model_data, f)
@@ -124,6 +126,7 @@ class RestModel:
         self.sampling_rate = model_data['sampling_rate']
         self.samples_per_window = model_data['samples_per_window']
         self.stride = model_data['stride']
+        self.nu = model_data.get('nu', 0.01)  # Add this with default
         
         print(f"RestModel loaded from {filepath}")
         return True
