@@ -19,7 +19,8 @@ calibrate
 ----------------- already done left to gain basic understanding of the system --------------------------
 
 My aim: 
-"Segement the data in calibration_data/p3 according to rest gesture in the calibration_data/p3rest folder. Because  gestures in calibration_data/p3 include rest->gesture->rest So we need to cut the rest positions and then save these new data to calibration_data/p3new."
+"Segement the data in calibration_data/p3 according to rest gesture in the calibration_data/p3rest folder. Because  gestures in calibration_data/p3 include rest->gesture->rest So we need to cut the rest positions and then save these new data to calibration_data/p3new." Note: one-class SVM might work for this
+
 SO I need this procedure for all participant their folders are named as follows: p1,p2,p3,p4,p5,p6 and p1rest,p2rest.....
 This procedure will be done between same participant with this I mean segment p3 data with p3rest, not p3 data with p4rest
 I need detailed plan on how would you implement this.
@@ -31,8 +32,8 @@ while is_running True
                 do feature engineering  
                 run classifymodel(model 2) window size 100 ms 
 
-we will have 2 models:
-model1(the rest model) will be trained on calibration_data/pXnew (X being participant number [1,6]) as not-rest class and calibration_data/pXrest (X being participant number [1,6]) as rest class.
+we will have 2 models which they will need seperate classes restmodel and classifymodel class:
+model1(the rest model) will be one-class SVM calibration_data/pXrest (X being participant number [1,6]) as rest class.
 
 model2(the classification model) will be trained on calibration_data/pXnew (X being participant number [1,6]) each gesture name as a class.
 
