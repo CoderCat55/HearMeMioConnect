@@ -40,9 +40,23 @@ model2(the classification model) will be trained on calibration_data/pXnew (X be
 
 classification and commanding should run simulteneusly so I can start-stop classsification. I would prefer multiprocessing.
 
+Problems I've Identified:
 
-The problems: 
+Current model.py has only ONE classifier class - You need TWO separate classes (RestModel and ClassifyModel)
+Feature extraction happens at wrong granularity - You want 20ms windows for rest detection but current code works on full 3-second samples
+No sliding window implementation - Need to process data in overlapping/sequential windows
+Segmentation is offline preprocessing - Should be separate from real-time classification
 
+Open Questions for You
+
+Segmentation threshold: When sliding through gesture data, how many consecutive "non-rest" windows should trigger a segment start? (e.g., 3 consecutive non-rest = gesture begins)
+Window overlap: Should 20ms windows overlap (sliding) or be sequential (tumbling)?
+Minimum segment length: What's the minimum length for a valid gesture segment? (e.g., discard segments < 0.5 seconds)
+Training strategy: Should rest model be participant-specific or trained on all participants' rest data combined?
+Feature engineering: Your current features (Line 23-35 model.py) are mean, std, min, max, range. Do you want to add frequency domain features (FFT) for better gesture discrimination?
+
+
+Notes: each model can have its own train funciton
 
 RULES: Please really read all the code. Do not make assumptions while answering. While giving ansswers include the chain of thought, why did you make that assumption, which part of thee code leads you to that? If you are not sure about how something works just tell me.
 

@@ -2,8 +2,10 @@
 import multiprocessing as mp
 from multiprocessing import Process, shared_memory
 import numpy as np
-from model import GestureClassifier
 import time
+from rest_model import RestModel
+from gesture_model import GestureModel
+import os
 
 # Constants
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
@@ -140,46 +142,144 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
 
-def Classify(stream_buffer, stream_index, classifier, is_running_flag):
-    model1windowSize = 20  #in ms  #daha yavaş
-    model2windowSize = 100 #in ms #daha hızlı
-    """Called from main process when user wants to classify"""
-    """ while is_running True
-            check if the gesture is rest  with restmodel(model 1) which is a svm model  windowSize 20ms  
-            if gesture != rest
-                do feature engineering  
-                run classifymodel(model 2) window size 100 ms 
-    """
-    #burada 2 farklı model kullanacağımız için model.py'yi silip tüm fonksiyonları buraya eklemek daha mı mantıklı olur?
-    if is_running_flag.value == 0:
-        return None
+def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
+    """Process 2: Runs classification separately"""
+    import time
+    import numpy as np
+    from multiprocessing import shared_memory
     
-    while is_running_flag :
-        #read 20 sample
-        #do feature engineering
-        samples_read = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds= model1windowSize/1000)
-        samples= classifier.extract_features(samples_read)
-        print("etwas")  
-        if model1.predict(samples):    #model1 is not defined 
-            #it means rest positon
+    # Attach to shared memory
+    shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
+    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
+    
+    # Load both models
+    rest_model = RestModel(window_size_ms=20, sampling_rate=200)
+    if not rest_model.load_model('rest_model.pkl'):
+        print("ERROR: Could not load rest_model.pkl")
+        return
+    
+    gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
+    if not gesture_model.load_model('gesture_model.pkl'):
+        print("ERROR: Could not load gesture_model.pkl")
+        return
+    
+    print("Classification process ready!")
+    
+    last_position = 0
+    
+    while True:
+        if is_running_flag.value == 0:
+            time.sleep(0.01)
             continue
-        #if not rest position
-        new_samples_read = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=model2windowSize/1000)
-        new_samples = GestureClassifier.extract_features(samples_read)
-        # Classify
-        result = classifier.classify(new_samples)
-        print(f"Predicted gesture: {result}")
-        return result
+        
+        # Wait for new data
+        current_position = stream_index.value
+        if current_position <= last_position:
+            time.sleep(0.001)
+            continue
+        
+        # Check if we have enough data for 20ms window (4 samples)
+        if current_position < rest_model.samples_per_window:
+            continue
+        
+        # Get last 20ms of data (4 samples)
+        end_idx = current_position % STREAM_BUFFER_SIZE
+        start_idx = (current_position - rest_model.samples_per_window) % STREAM_BUFFER_SIZE
+        
+        if start_idx < end_idx:
+            window_20ms = stream_buffer[start_idx:end_idx].copy()
+        else:
+            # Wrap around
+            part1 = stream_buffer[start_idx:]
+            part2 = stream_buffer[:end_idx]
+            window_20ms = np.concatenate([part1, part2])
+        
+        # Extract features and check if rest
+        features_20ms = rest_model.extract_features(window_20ms)
+        
+        if rest_model.is_rest(features_20ms):
+            last_position = current_position
+            continue  # Rest position, skip classification
+        
+        # Not rest - check if we have enough data for 100ms window (20 samples)
+        if current_position < gesture_model.samples_per_window:
+            continue
+        
+        # Get last 100ms of data (20 samples)
+        end_idx_100 = current_position % STREAM_BUFFER_SIZE
+        start_idx_100 = (current_position - gesture_model.samples_per_window) % STREAM_BUFFER_SIZE
+        
+        if start_idx_100 < end_idx_100:
+            window_100ms = stream_buffer[start_idx_100:end_idx_100].copy()
+        else:
+            # Wrap around
+            part1 = stream_buffer[start_idx_100:]
+            part2 = stream_buffer[:end_idx_100]
+            window_100ms = np.concatenate([part1, part2])
+        
+        # Extract features and classify
+        features_100ms = gesture_model.extract_features(window_100ms)
+        result = gesture_model.classify(features_100ms)
+        
+        # Send result to main process
+        result_queue.put(result)
+        print(f"🎯 Detected: {result}")
+        
+        last_position = current_position
 
-def Train(classifier):
-    """Called from main process when user wants to train"""
-    print("Training model...")
-    success = classifier.train()
-    if success:
-        classifier.save_model('model.pkl')
-        print("Training complete!")
-    else:
-        print("Training failed! Make sure you have calibration data.")
+def Train():
+    """Train both models"""
+    import glob
+    
+    print("=== Training Models ===")
+    
+    # Train RestModel
+    print("\n1. Training RestModel...")
+    rest_data = []
+    for participant_id in range(1, 7):
+        folder = f'calibration_data/p{participant_id}rest'
+        if os.path.exists(folder):
+            files = glob.glob(f'{folder}/*.npy')
+            for file in files:
+                rest_data.append(np.load(file))
+    
+    if len(rest_data) == 0:
+        print("ERROR: No rest data found!")
+        return False
+    
+    rest_model = RestModel(window_size_ms=20, sampling_rate=200)
+    rest_model.train(rest_data)
+    rest_model.save_model('rest_model.pkl')
+    
+    # Train GestureModel
+    print("\n2. Training GestureModel...")
+    gesture_data = {}
+    for participant_id in range(1, 7):
+        folder = f'calibration_data/p{participant_id}new'
+        if not os.path.exists(folder):
+            print(f"Warning: {folder} not found, skipping...")
+            continue
+        
+        files = glob.glob(f'{folder}/*.npy')
+        for file in files:
+            basename = os.path.basename(file)
+            gesture_name = basename.split('_')[0]
+            
+            if gesture_name not in gesture_data:
+                gesture_data[gesture_name] = []
+            
+            gesture_data[gesture_name].append(np.load(file))
+    
+    if len(gesture_data) < 2:
+        print("ERROR: Need at least 2 gestures in pXnew folders!")
+        return False
+    
+    gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
+    gesture_model.train(gesture_data)
+    gesture_model.save_model('gesture_model.pkl')
+    
+    print("\n=== Training Complete! ===")
+    return True
 
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
            recording_flag, recording_gesture, classifier, is_running_flag): 
@@ -187,16 +287,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
     match value:
         case "tr":  #train
             print("now will run train function")
-            Train(classifier)
-        case "cf": # classify <3
-            print("now will run classify function")
-            print(f"Classify will start in ", end='', flush=True)
-            for i in range(CLASSIFICATION_STARTS, 0, -1):
-                print(f"{i}... ", end='', flush=True)
-                time.sleep(1)
-            print("\n")
-            print("Classifying gesture...")
-            Classify(stream_buffer, stream_index, classifier)
+            Train()
         case "cb":  #calibrate
             print("now will run calibrate function")
             gesture_name = input("Which gesture would you like to calibrate? ")
@@ -251,19 +342,25 @@ if __name__ == "__main__":
     # Give it time to connect
     print("Connecting to Myo armbands...")
     time.sleep(5)
+    # Start classification process
+    classify_process = Process(
+        target=Classify,
+        args=(shm_stream.name, stream_index, is_running_flag)  # No result_queue
+    )
+    classify_process.daemon = True
+    classify_process.start()
     
-    # Initialize classifier in main process
-    classifier = GestureClassifier()
-    classifier.load_calibration_data()
-    
-    print("\nSystem ready! Available commands: tr= train, cf =classify,cb= calibrate")
+    print("\nSystem ready! Available commands:")
+    print("  tr = train models")
+    print("  cb = calibrate gesture")
+    print("  startcf = start classification")
+    print("  stopcf = stop classification")
     print()
-    
     # Command loop
     try:
         while True:
             Command(stream_buffer, stream_index, calib_buffer, calib_index,
-               recording_flag, recording_gesture, classifier, is_running_flag)
+                   recording_flag, recording_gesture, is_running_flag)
     except KeyboardInterrupt:
         print("\nShutting down...")
         is_running_flag.value = 0
