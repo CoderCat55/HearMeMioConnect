@@ -9,6 +9,7 @@ Böylece rest (dinlenme) kısımlarının kesilip kesilmediğini gözle kontrol 
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import random
 import sys
 
 def load_data(file_path):
@@ -80,12 +81,34 @@ def plot_file(file_path):
     plt.show()
 
 if __name__ == "__main__":
-    # BURAYI DÜZENLEYİN: Kontrol etmek istediğiniz dosyanın tam yolunu buraya yapıştırın.
-    TARGET_FILE = r"C:\Users\yagmu\OneDrive\Belgeler\GitHub\HearMeMioConnect\processed_data\p1\yrd_1765448698_cropped.npy"
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    PROCESSED_DIR = os.path.join(BASE_DIR, "processed_data")
     
-    # Eğer dosyayı terminalden argüman olarak verirseniz onu kullanır
+    target_file = None
+
+    # 1. Komut satırından dosya yolu verildiyse onu kullan
     if len(sys.argv) > 1:
-        TARGET_FILE = sys.argv[1]
+        target_file = sys.argv[1]
+    
+    # 2. If not provided, find a random .npy file from the processed_data folder
+    if target_file is None or not os.path.exists(target_file):
+        npy_files = []
+        for root, dirs, files in os.walk(PROCESSED_DIR):
+            for file in files:
+                if file.endswith(".npy"):
+                    npy_files.append(os.path.join(root, file))
         
-    print(f"Görselleştiriliyor: {TARGET_FILE}")
-    plot_file(TARGET_FILE)
+        if npy_files:
+            target_file = random.choice(npy_files)
+        else:
+            print("HATA: İşlenmiş .npy dosyası bulunamadı. 'processed_data' klasörünü kontrol edin.")
+            sys.exit(1)
+        
+    if target_file and os.path.exists(target_file):
+        print(f"Görselleştiriliyor: {target_file}")
+
+        # Açıklama satırını yazdır
+        print("NOT: Başarılı bir segmentasyonda, grafiğin başında ve sonunda uzun düz (rest) çizgiler olmamalıdır.")
+        plot_file(target_file)
+    else:
+        print("HATA: Gösterilecek dosya bulunamadı. Lütfen processed_data klasörünü kontrol edin.")

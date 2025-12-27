@@ -181,6 +181,135 @@ def Train(classifier):
     else:
         print("Training failed! Make sure you have calibration data.")
 
+def RealTimePipeline(stream_buffer, stream_index):
+    """
+    Yeni Eklenen Fonksiyon:
+    Model 1 (Segmentasyon) ve Model 2 (SVM) kullanarak canlı sınıflandırma yapar.
+    """
+    print("\n=== Real-Time Pipeline (Model 1 + Model 2) ===")
+    
+    # Gerekli kütüphaneleri burada import ediyoruz ki dosyanın başı karışmasın
+    try:
+        from model1 import RestDetector
+        from model2 import GestureClassifierSVM
+        import pickle
+        import os
+    except ImportError as e:
+        print(f"Hata: Gerekli model dosyaları (model1.py, model2.py) bulunamadı: {e}")
+        return
+
+    # 1. Model 2'yi (SVM) Yükle
+    model_path = "model2.pkl"
+    if not os.path.exists(model_path):
+        print("HATA: model2.pkl bulunamadı. Lütfen önce model2.py'yi çalıştırıp eğitin.")
+        return
+
+    classifier = GestureClassifierSVM()
+    try:
+        with open(model_path, 'rb') as f:
+            data = pickle.load(f)
+            classifier.svm = data['model']
+            classifier.scaler = data['scaler']
+            classifier.is_trained = True
+        print("Model 2 (SVM) başarıyla yüklendi.")
+    except Exception as e:
+        print(f"Model yükleme hatası: {e}")
+        return
+
+    # 2. Model 1'i (RestDetector) Başlat ve Kalibre Et
+    # Ortam gürültüsünü öğrenmek için kısa bir kalibrasyon yapıyoruz
+    detector = RestDetector(window_size=20, threshold_factor=3.5)
+    
+    print("\n--- HIZLI KALİBRASYON (REST) ---")
+    print("Lütfen kolunuzu 2 saniye boyunca serbest/hareketsiz bırakın...")
+    time.sleep(1.0)
+    print("Veri okunuyor...")
+    time.sleep(2.0)
+    
+    # Son 2 saniyelik veriyi al
+    rest_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=2.0)
+    
+    if rest_data is None or len(rest_data) < 50:
+        print("Hata: Kalibrasyon için yeterli veri okunamadı. Myo bağlı mı?")
+        return
+        
+    detector.fit([rest_data])
+    print(f"Kalibrasyon Tamam. Gürültü Eşiği: {detector.threshold:.4f}")
+    print("Sistem Başladı! (Çıkmak için CTRL+C)")
+
+    # Dinamik Veri Toplama Parametreleri
+    POLL_INTERVAL = 0.1         # Döngü hızı (saniye)
+    MAX_GESTURE_DURATION = 3.0  # Maksimum hareket süresi (bundan uzunsa keser)
+    SILENCE_TIMEOUT = 0.5       # Hareket bitti kabul etmek için gereken sessizlik süresi
+
+    try:
+        while True:
+            # 1. Adım: Rest Kontrolü (Küçük pencere ~0.2sn)
+            window_data = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=0.2)
+            
+            if window_data is None or len(window_data) < 20:
+                time.sleep(0.05)
+                continue
+            
+            # Eğer Rest ise başa dön
+            if detector.predict(window_data):
+                time.sleep(0.05)
+                continue
+            
+            # 2. Adım: Hareket Algılandı -> Dinamik Veri Toplama
+            print("\n>>> HAREKET ALGILANDI! Veri toplanıyor...", end="", flush=True)
+            
+            collected_data = [window_data] # Başlangıcı ekle
+            start_time = time.time()
+            silence_start = None
+            
+            # Hareketi içeren son geçerli parçanın indeksi (Başlangıçta 1 parça var)
+            valid_data_end_index = 1 
+            
+            while (time.time() - start_time) < MAX_GESTURE_DURATION:
+                time.sleep(POLL_INTERVAL)
+                
+                # Yeni gelen parçayı al
+                chunk = get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=POLL_INTERVAL)
+                
+                if chunk is not None and len(chunk) > 0:
+                    collected_data.append(chunk)
+                    
+                    # Bu parça Rest mi?
+                    is_rest = detector.predict(chunk)
+                    if is_rest:
+                        if silence_start is None:
+                            silence_start = time.time()
+                        elif (time.time() - silence_start) > SILENCE_TIMEOUT:
+                            print(" Bitti (Rest).")
+                            break # İç döngüden çık
+                    else:
+                        silence_start = None # Hareket devam ediyor
+                        print(".", end="", flush=True)
+                        # Aktif veri geldiği için geçerli son indeksi güncelle
+                        valid_data_end_index = len(collected_data)
+            
+            # 3. Adım: Sınıflandırma
+            # Sadece geçerli (aktif) kısımları alıyoruz, sondaki rest kısmını atıyoruz
+            final_data = collected_data[:valid_data_end_index]
+            
+            if final_data:
+                full_gesture = np.vstack(final_data)
+                
+                # Çok kısa hareketleri filtrele (Gürültü olabilir)
+                if len(full_gesture) > 40: # ~0.4 saniye altı gürültüdür
+                    prediction = classifier.predict(full_gesture)
+                    print(f"\n>>> SONUÇ: {prediction} (Süre: {len(full_gesture)/100:.2f}s)")
+                else:
+                    print("\n(Çok kısa hareket, atlandı)")
+            
+            # Tekrar tetiklenmemesi için kısa bekleme
+            time.sleep(0.5)
+            print("Hazır...")
+            
+    except KeyboardInterrupt:
+        print("\nReal-Time Pipeline durduruldu. Ana menüye dönülüyor.")
+
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
            recording_flag, recording_gesture, classifier):
     value = input("Enter your command majesty: ")
@@ -211,8 +340,11 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             print("\n")
             print("Classifying gesture...")
             LiveClassify()
+        case "rt": # Real-Time Pipeline (Yeni Komut)
+            print("Real-Time Pipeline başlatılıyor...")
+            RealTimePipeline(stream_buffer, stream_index)
         case _:
-            print("Invalid command! Use: tr, cf, cb, or live")
+            print("Invalid command! Use: tr, cf, cb, live, or rt")
 
 if __name__ == "__main__":
     print("=== Gesture Recognition System ===")
@@ -258,7 +390,7 @@ if __name__ == "__main__":
     classifier = GestureClassifier()
     classifier.load_calibration_data()
     
-    print("\nSystem ready! Available commands: tr= train, cf =classify,cb= calibrate")
+    print("\nSystem ready! Available commands: tr= train, cf =classify, cb= calibrate, rt= realtime")
     print()
     
     # Command loop
