@@ -3,7 +3,7 @@ import multiprocessing as mp
 from multiprocessing import Process, shared_memory
 import numpy as np
 import time
-from rest_model import RestModel
+from rest_model import RestDetector
 from gesture_model import GestureModel
 import os
 
@@ -153,7 +153,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
     
     # Load both models
-    rest_model = RestModel(window_size_ms=20, sampling_rate=200)
+    rest_model = RestDetector(window_size=20, threshold_factor=6.0, min_duration=20, padding=0)
     if not rest_model.load_model('rest_model.pkl'):
         print("ERROR: Could not load rest_model.pkl")
         return
@@ -166,7 +166,11 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
     print("Classification process ready!")
     
     last_position = 0
-    
+    # Calculate window sizes
+    # RestDetector works on raw data windows (20ms = 4 samples at 200Hz)
+    rest_window_samples = 4  # 20ms * 200Hz
+    # GestureModel uses 100ms windows (20 samples at 200Hz)
+    gesture_window_samples = gesture_model.samples_per_window  # Should be 20
     while True:
         if is_running_flag.value == 0:
             time.sleep(0.01)
@@ -179,13 +183,13 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
             continue
         
         # Check if we have enough data for 20ms window (4 samples)
-        if current_position < rest_model.samples_per_window:
+        if current_position < rest_window_samples:
             continue
         
         # Get last 20ms of data (4 samples)
         end_idx = current_position % STREAM_BUFFER_SIZE
-        start_idx = (current_position - rest_model.samples_per_window) % STREAM_BUFFER_SIZE
-        
+        start_idx = (current_position - rest_window_samples) % STREAM_BUFFER_SIZE
+
         if start_idx < end_idx:
             window_20ms = stream_buffer[start_idx:end_idx].copy()
         else:
