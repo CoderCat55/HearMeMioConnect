@@ -46,4 +46,5 @@ Your aim is to discuss the structure with me. I need you to be objective. You sh
 
 When change of code only change what is relevant do not try to change anything that is not relevant with my aim. I need to know which parts you have made changes tell me because sometimes you change something inside a fucntion which I am not aware of.
 
+You may only write which parts of the code I should change and where changes shhould be made to save time instead of writing the whole script again.
 

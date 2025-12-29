@@ -201,7 +201,8 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
         # Extract features and check if rest
         features_20ms = rest_model.extract_features(window_20ms)
         
-        if rest_model.is_rest(features_20ms):
+        is_rest = rest_model.predict(window_20ms)
+        if is_rest:
             last_position = current_position
             continue  # Rest position, skip classification
         
@@ -255,8 +256,8 @@ def Train():
         return False
     
     print(f"\nTraining on {len(rest_data)} rest samples from all participants...")
-    rest_model = RestModel(window_size_ms=20, sampling_rate=200)
-    rest_model.train(rest_data)
+    rest_model = RestDetector(window_size=20, threshold_factor=6.0, min_duration=20, padding=0)
+    rest_model.fit(rest_data)
     rest_model.save_model('rest_model.pkl')
     print("✓ RestModel saved as rest_model.pkl (for real-time use)")
     
@@ -264,7 +265,7 @@ def Train():
     print("\n2. Training GestureModel on segmented gesture data...")
     gesture_data = {}
     for participant_id in range(1, 7):
-        folder = f'calibration_data/p{participant_id}new'
+        folder = f'processed_data/p{participant_id}'
         if not os.path.exists(folder):
             print(f"Warning: {folder} not found, skipping...")
             continue
@@ -279,10 +280,6 @@ def Train():
             
             gesture_data[gesture_name].append(np.load(file))
     
-    if len(gesture_data) < 2:
-        print("ERROR: Need at least 2 gestures in pXnew folders!")
-        print("Please run segment_gestures.py first to create pXnew folders")
-        return False
     
     print(f"Found {len(gesture_data)} gesture types:")
     for gesture_name, samples in gesture_data.items():
