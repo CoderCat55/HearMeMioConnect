@@ -39,6 +39,23 @@ TODO:
 rest_model.py should work in corresponding place in main.py
 gesture_model.py train datas are in processed_data folder. each participants data will be used and class names would be gesture names.
 
+Consider:
+4. Window Size Mismatch: 20ms vs 4 Samples
+Location: main.py lines 157-158
+# Line 157-158: Comment says 20ms, calculates 4 samples
+# RestDetector works on raw data windows (20ms = 4 samples at 200Hz)
+rest_window_samples = 4  # 20ms * 200Hz
+Analysis: 20ms × 200Hz = 4 samples ✓ This is mathematically correct!
+
+However, looking at RestDetector.__init__():
+def __init__(self, window_size=20, threshold_factor=3.0, ...):
+    self.window_size = 20  # This is 20 SAMPLES, not milliseconds!
+The mismatch: RestDetector's window_size=20 means 20 samples (100ms at 200Hz), but the real-time code uses 4 samples (20ms). The model was trained on 20-sample windows but is being used with 4-sample windows.
+
+Chain of thought: RestDetector's _compute_energy() uses self.window_size for convolution smoothing. If trained with 20-sample windows but used with 4-sample windows, the energy calculation will be completely different.
+
+What I want to do in this situation is keep the rest_model.py's methods of windowsamples etc.
+
 
 RULES: Please really read all the code. Do not make assumptions while answering. While giving ansswers include the chain of thought, why did you make that assumption, which part of thee code leads you to that? If you are not sure about how something works just tell me.
 
@@ -47,4 +64,6 @@ Your aim is to discuss the structure with me. I need you to be objective. You sh
 When change of code only change what is relevant do not try to change anything that is not relevant with my aim. I need to know which parts you have made changes tell me because sometimes you change something inside a fucntion which I am not aware of.
 
 You may only write which parts of the code I should change and where changes shhould be made to save time instead of writing the whole script again.
+
+WHAT IS EXPECTED FROM THIS CODE. WHAT CAN IT DO. WHICH MISMATCHES HAVE YOU SPOTTED AS A LIST
 

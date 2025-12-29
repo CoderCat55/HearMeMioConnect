@@ -198,9 +198,6 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
             part2 = stream_buffer[:end_idx]
             window_20ms = np.concatenate([part1, part2])
         
-        # Extract features and check if rest
-        features_20ms = rest_model.extract_features(window_20ms)
-        
         is_rest = rest_model.predict(window_20ms)
         if is_rest:
             last_position = current_position
@@ -295,7 +292,7 @@ def Train():
     return True
 
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
-           recording_flag, recording_gesture, classifier, is_running_flag): 
+           recording_flag, recording_gesture,is_running_flag): 
     value = input("Enter your command majesty: ")
     match value:
         case "tr":  #train
@@ -305,7 +302,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             print("now will run calibrate function")
             gesture_name = input("Which gesture would you like to calibrate? ")
             Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-                     recording_gesture, classifier)
+                     recording_gesture, )
         case "startcf":
             print("starting classification")
             is_running_flag.value = 1
@@ -358,7 +355,7 @@ if __name__ == "__main__":
     # Start classification process
     classify_process = Process(
         target=Classify,
-        args=(shm_stream.name, stream_index, is_running_flag)  # No result_queue
+        args=(shm_stream.name, stream_index, is_running_flag,result_queue)  # result queue is not defined why?
     )
     classify_process.daemon = True
     classify_process.start()
