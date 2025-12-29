@@ -352,7 +352,7 @@ if __name__ == "__main__":
     # Start classification process
     classify_process = Process(
         target=Classify,
-        args=(shm_stream.name, stream_index, is_running_flag,result_queue)  # result queue is not defined why?
+        args=(shm_stream.name, stream_index, is_running_flag,result_queue) 
     )
     classify_process.daemon = True
     classify_process.start()
