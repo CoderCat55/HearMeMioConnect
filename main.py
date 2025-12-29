@@ -11,8 +11,8 @@ import os
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
 CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
 
-CALIBRATION_DURATION = 3  # seconds #no longer needed
-CLASSIFICATION_DURATION = 3  # same! #no longer needed
+CALIBRATION_DURATION = 3  
+CLASSIFICATION_DURATION = 3 
 
 CALIBRATION_STARTS = 5 
 CLASSIFICATION_STARTS = 5 
@@ -95,7 +95,7 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             return np.concatenate([part1, part2])
         
 def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-              recording_gesture, classifier):
+              recording_gesture):
     """Called from main process when user wants to calibrate"""
     """print(f"Calibration will start in ", end='', flush=True)
     for i in range(CALIBRATION_STARTS, 0, -1):
@@ -132,7 +132,7 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
         return
     
     # Add to classifier
-    classifier.add_calibration_sample(gesture_name, recorded_data)
+    #classifier.add_calibration_sample(gesture_name, recorded_data)
     
     # Save to disk
     import os
@@ -141,6 +141,7 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag,
     np.save(f'calibration_data/{gesture_name}_{timestamp}.npy', recorded_data)
     
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
+"""Calibrate funcitoan will be dealt with later"""
 
 def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
     """Process 2: Runs classification separately"""
@@ -167,8 +168,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
     
     last_position = 0
     # Calculate window sizes
-    # RestDetector works on raw data windows (20ms = 4 samples at 200Hz)
-    rest_window_samples = 4  # 20ms * 200Hz
+    rest_window_samples = 20   # 100ms * 200Hz = 20 samples
     # GestureModel uses 100ms windows (20 samples at 200Hz)
     gesture_window_samples = gesture_model.samples_per_window  # Should be 20
     while True:
@@ -331,6 +331,7 @@ if __name__ == "__main__":
     recording_flag = mp.Value('i', 0)
     recording_gesture = mp.Array('c', 50)
     is_running_flag = mp.Value('i', 0)
+    result_queue = mp.Queue()
 
     # Start data acquisition process
     data_process = Process(
@@ -349,9 +350,6 @@ if __name__ == "__main__":
         print("ERROR: Data acquisition process failed to start!")
         print("Check if Myo dongle is connected and MyoConnect is closed")
     
-    # Give it time to connect
-    print("Connecting to Myo armbands...")
-    time.sleep(5)
     # Start classification process
     classify_process = Process(
         target=Classify,
