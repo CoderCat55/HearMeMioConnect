@@ -257,7 +257,7 @@ def Train():
     rest_model.save_model('rest_model.pkl')
     print("✓ RestModel saved as rest_model.pkl (for real-time use)")
     
-    # Train GestureModel on segmented data from pXnew folders
+    # Train GestureModel on segmented data from participant folders
     print("\n2. Training GestureModel on segmented gesture data...")
     gesture_data = {}
     for participant_id in range(1, 7):
