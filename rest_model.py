@@ -1,9 +1,12 @@
 import numpy as np
+import pickle  
+import os  
 # Model 1 Parameters
 WINDOW_SIZE = 20
 THRESHOLD_FACTOR = 6.0  # Artırıldı: Gürültüyü hareket sanmaması için
 MIN_DURATION = 20
 PADDING = 0        
+
 class RestDetector:
     """
     Model 1: Energy-based segmentation model.
@@ -43,7 +46,43 @@ class RestDetector:
         print(f"Std Dev Noise    : {std_noise:.4f}")
         print(f"Calculated Threshold: {self.threshold:.4f}")
         return True
-
+    def save_model(self, filepath):
+        """
+        Save the trained RestDetector model to disk.
+        """
+        model_data = {
+            'threshold': self.threshold,
+            'window_size': self.window_size,
+            'threshold_factor': self.threshold_factor,
+            'min_duration': self.min_duration,
+            'padding': self.padding
+        }
+        with open(filepath, 'wb') as f:
+            pickle.dump(model_data, f)
+        print(f"RestDetector model saved to {filepath}")
+        
+    def load_model(self, filepath):
+        """
+        Load a trained RestDetector model from disk.
+        Returns True if successful, False otherwise.
+        """
+        if not os.path.exists(filepath):
+            print(f"RestDetector model file {filepath} not found")
+            return False
+        
+        with open(filepath, 'rb') as f:
+            model_data = pickle.load(f)
+        
+        self.threshold = model_data['threshold']
+        self.window_size = model_data['window_size']
+        self.threshold_factor = model_data['threshold_factor']
+        self.min_duration = model_data['min_duration']
+        self.padding = model_data['padding']
+        
+        print(f"RestDetector model loaded from {filepath}")
+        print(f"Threshold: {self.threshold:.4f}")
+        return True
+    
     def predict(self, window_data):
         """
         Gerçek zamanlı (Real-time) kullanım için tahmin fonksiyonu.

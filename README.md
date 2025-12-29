@@ -24,7 +24,7 @@ My aim:
 
  classification details :
 while is_running True
-            check if the gesture is rest  with restmodel(model 1)
+            check if the gesture is rest  with restmodel(model 1) 
             if gesture != rest
                 do feature engineering  
                 run classifymodel(model 2) window size 100 ms 
@@ -36,8 +36,7 @@ model2(the classification model) will be trained on processed_data ,all the part
 
 
 TODO:
-rest_model.py should work in corresponding place in main.py
-gesture_model.py train datas are in processed_data folder. each participants data will be used and class names would be gesture names.
+
 
 Consider:
 4. Window Size Mismatch: 20ms vs 4 Samples

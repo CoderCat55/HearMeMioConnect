@@ -94,8 +94,7 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             part2 = stream_buffer[:current_idx_wrapped]  # From beginning to current
             return np.concatenate([part1, part2])
         
-def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-              recording_gesture):
+def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording_gesture):
     """Called from main process when user wants to calibrate"""
     """print(f"Calibration will start in ", end='', flush=True)
     for i in range(CALIBRATION_STARTS, 0, -1):
@@ -302,7 +301,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             print("now will run calibrate function")
             gesture_name = input("Which gesture would you like to calibrate? ")
             Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-                     recording_gesture, )
+                     recording_gesture )
         case "startcf":
             print("starting classification")
             is_running_flag.value = 1
