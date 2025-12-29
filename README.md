@@ -38,24 +38,6 @@ model2(the classification model) will be trained on processed_data ,all the part
 TODO:
 
 
-Consider:
-4. Window Size Mismatch: 20ms vs 4 Samples
-Location: main.py lines 157-158
-# Line 157-158: Comment says 20ms, calculates 4 samples
-# RestDetector works on raw data windows (20ms = 4 samples at 200Hz)
-rest_window_samples = 4  # 20ms * 200Hz
-Analysis: 20ms × 200Hz = 4 samples ✓ This is mathematically correct!
-
-However, looking at RestDetector.__init__():
-def __init__(self, window_size=20, threshold_factor=3.0, ...):
-    self.window_size = 20  # This is 20 SAMPLES, not milliseconds!
-The mismatch: RestDetector's window_size=20 means 20 samples (100ms at 200Hz), but the real-time code uses 4 samples (20ms). The model was trained on 20-sample windows but is being used with 4-sample windows.
-
-Chain of thought: RestDetector's _compute_energy() uses self.window_size for convolution smoothing. If trained with 20-sample windows but used with 4-sample windows, the energy calculation will be completely different.
-
-What I want to do in this situation is keep the rest_model.py's methods of windowsamples etc.
-
-
 RULES: Please really read all the code. Do not make assumptions while answering. While giving ansswers include the chain of thought, why did you make that assumption, which part of thee code leads you to that? If you are not sure about how something works just tell me.
 
 Your aim is to discuss the structure with me. I need you to be objective. You should use strategies like listing pros and cons of a situation and judge it according to my aim.

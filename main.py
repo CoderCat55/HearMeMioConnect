@@ -309,7 +309,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             print("stopping classification")
             is_running_flag.value = 0
         case _:
-            print("Invalid command! Use: tr, cf, cb, or live")
+            print("Invalid command! Use: tr, cb, startcf, stopcf")
 
 if __name__ == "__main__":
     print("=== Gesture Recognition System ===")
