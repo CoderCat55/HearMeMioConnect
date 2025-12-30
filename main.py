@@ -154,7 +154,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
     result_queue.put("CLASSIFY: Shared memory attached") 
     # Load both models
-    rest_model = RestDetector(window_size=20, threshold_factor=6.0, min_duration=20, padding=0) #need to change this
+    rest_model = RestDetector(window_size=20) 
     if not rest_model.load_model('rest_model.pkl'):
         result_queue.put("ERROR: Could not load rest_model.pkl")
         return
@@ -231,31 +231,13 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
         last_position = current_position
 """"""
 def Train():
-    """Train both models - RestModel on ALL participants, GestureModel on segmented data"""
+    #Train both models - RestModel on ALL participants, GestureModel on segmented data"""
     import glob
     import os
     
     print("=== Training Models ===")
-    
-    # Train RestModel on ALL participants' rest data (combined)
-    print("\n1. Training RestModel on ALL participants' rest data...")
-    rest_data = []
-    for participant_id in range(1, 7):
-        folder = f'calibration_data/p{participant_id}rest'
-        if os.path.exists(folder):
-            files = glob.glob(f'{folder}/*.npy')
-            for file in files:
-                data = np.load(file)
-                rest_data.append(data)
-                print(f"  ✓ Loaded: {os.path.basename(file)} from participant {participant_id}")
-    
-    if len(rest_data) == 0:
-        print("ERROR: No rest data found!")
-        return False
-    
-    print(f"\nTraining on {len(rest_data)} rest samples from all participants...")
-    rest_model = RestDetector(window_size=20, threshold_factor=6.0, min_duration=20, padding=0)
-    rest_model.train(rest_data)
+    rest_model = RestDetector(window_size=20)
+    rest_model.train() #burada datalar rest_model.py tarafından çağrıldığı için gesture_model kadar kod yok.
     rest_model.save_model('rest_model.pkl')
     print("✓ RestModel saved as rest_model.pkl (for real-time use)")
     
