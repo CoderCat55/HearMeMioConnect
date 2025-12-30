@@ -24,7 +24,7 @@ My aim:
 
  classification details :
 while is_running True
-            check if the gesture is rest  with restmodel(model 1) 
+            check if the gesture is rest  with restmodel(model 1) window size 20 
             if gesture != rest
                 do feature engineering  
                 run classifymodel(model 2) window size 100 ms 
@@ -36,6 +36,10 @@ model2(the classification model) will be trained on processed_data ,all the part
 
 
 TODO:
+Delete the old rest_model.py
+create a new rest_model.py which will be multiclass svm as rest class consisting of datas from folder calibration_data/p{participant_id}rest'  and not-rest class will be consisting datas from processed_data/p{participant_id}' also window size would be 20, also feature extraction should be same as gesture_model.py
+rest_model should include load model,savemodel,train model(which is called in main.py train()) functions
+Create a list how this would be implemented to current system , which parts should be changed which parts should be added and where. 
 
 
 RULES: Please really read all the code. Do not make assumptions while answering. While giving ansswers include the chain of thought, why did you make that assumption, which part of thee code leads you to that? If you are not sure about how something works just tell me.
