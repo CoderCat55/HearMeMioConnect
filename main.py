@@ -6,7 +6,6 @@ import time
 from rest_model import RestDetector
 from gesture_model import GestureModel
 import os
-
 # Constants
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
 CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
@@ -142,16 +141,18 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
 """Calibrate funcitoan will be dealt with later"""
 
-def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
-    """Process 2: Runs classification separately"""
+def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM_BUFFER_SIZE):
+    #Process 2: Runs classification separately"""
     import time
     import numpy as np
     from multiprocessing import shared_memory
+    import sys
     
     # Attach to shared memory
     shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
-    
+    sys.stdout.write("CLASSIFY: Shared memory attached\n")
+    sys.stdout.flush()
     # Load both models
     rest_model = RestDetector(window_size=20, threshold_factor=6.0, min_duration=20, padding=0)
     if not rest_model.load_model('rest_model.pkl'):
@@ -227,7 +228,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue):
         print(f"🎯 Detected: {result}")
         
         last_position = current_position
-
+""""""
 def Train():
     """Train both models - RestModel on ALL participants, GestureModel on segmented data"""
     import glob
@@ -352,7 +353,7 @@ if __name__ == "__main__":
     # Start classification process
     classify_process = Process(
         target=Classify,
-        args=(shm_stream.name, stream_index, is_running_flag,result_queue) 
+        args=(shm_stream.name, stream_index, is_running_flag,result_queue,STREAM_BUFFER_SIZE) 
     )
     classify_process.daemon = True
     classify_process.start()
