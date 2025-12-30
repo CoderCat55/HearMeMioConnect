@@ -154,7 +154,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
     result_queue.put("CLASSIFY: Shared memory attached") 
     # Load both models
-    rest_model = RestDetector(window_size=20, threshold_factor=6.0, min_duration=20, padding=0)
+    rest_model = RestDetector(window_size=20, threshold_factor=6.0, min_duration=20, padding=0) #need to change this
     if not rest_model.load_model('rest_model.pkl'):
         result_queue.put("ERROR: Could not load rest_model.pkl")
         return
@@ -168,7 +168,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
     
     last_position = 0
     # Calculate window sizes
-    rest_window_samples = 20   # 100ms * 200Hz = 20 samples
+    rest_window_samples = 20   # 100ms * 200Hz = 20 samples  
     # GestureModel uses 100ms windows (20 samples at 200Hz)
     gesture_window_samples = gesture_model.samples_per_window  # Should be 20
     while True:
@@ -255,7 +255,7 @@ def Train():
     
     print(f"\nTraining on {len(rest_data)} rest samples from all participants...")
     rest_model = RestDetector(window_size=20, threshold_factor=6.0, min_duration=20, padding=0)
-    rest_model.fit(rest_data)
+    rest_model.train(rest_data)
     rest_model.save_model('rest_model.pkl')
     print("✓ RestModel saved as rest_model.pkl (for real-time use)")
     
