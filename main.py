@@ -6,6 +6,8 @@ import time
 from rest_model import RestDetector
 from gesture_model import GestureModel
 import os
+import threading
+
 # Constants
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
 CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
@@ -146,25 +148,23 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
     import time
     import numpy as np
     from multiprocessing import shared_memory
-    import sys
-    
+
     # Attach to shared memory
     shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
-    sys.stdout.write("CLASSIFY: Shared memory attached\n")
-    sys.stdout.flush()
+    result_queue.put("CLASSIFY: Shared memory attached") 
     # Load both models
     rest_model = RestDetector(window_size=20, threshold_factor=6.0, min_duration=20, padding=0)
     if not rest_model.load_model('rest_model.pkl'):
-        print("ERROR: Could not load rest_model.pkl")
+        result_queue.put("ERROR: Could not load rest_model.pkl")
         return
     
     gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
     if not gesture_model.load_model('gesture_model.pkl'):
-        print("ERROR: Could not load gesture_model.pkl")
+        result_queue.put("ERROR: Could not load gesture_model.pkl")
         return
     
-    print("Classification process ready!")
+    result_queue.put("✓ Classification process ready!")
     
     last_position = 0
     # Calculate window sizes
@@ -199,6 +199,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
             window_20ms = np.concatenate([part1, part2])
         
         is_rest = rest_model.predict(window_20ms)
+        result_queue.put(f"DEBUG: Rest={is_rest}, position={current_position}") 
         if is_rest:
             last_position = current_position
             continue  # Rest position, skip classification
@@ -309,8 +310,21 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
         case "stopcf":
             print("stopping classification")
             is_running_flag.value = 0
+        case "debug":
+            print(f"Stream index: {stream_index.value}")
+            print(f"Classification running: {is_running_flag.value}")
+            print(f"Recent data sample: {stream_buffer[stream_index.value % STREAM_BUFFER_SIZE][:8]}")
         case _:
             print("Invalid command! Use: tr, cb, startcf, stopcf")
+
+def monitor_classification_results(result_queue):
+    """Read from queue and print to terminal"""
+    while True:
+        try:
+            message = result_queue.get(timeout=0.1)
+            print(f"\n{message}")  # Print with newline so it doesn't mess up input prompt
+        except:
+            continue  # Queue empty, keep checking
 
 if __name__ == "__main__":
     print("=== Gesture Recognition System ===")
@@ -357,6 +371,10 @@ if __name__ == "__main__":
     )
     classify_process.daemon = True
     classify_process.start()
+    monitor_thread = threading.Thread(
+    target=monitor_classification_results,
+    args=(result_queue,),daemon=True)
+    monitor_thread.start()
     
     print("\nSystem ready! Available commands:")
     print("  tr = train models")
