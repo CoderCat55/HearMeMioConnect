@@ -36,9 +36,9 @@ model2(the classification model) will be trained on processed_data ,all the part
 
 
 TODO:
-Delete the old rest_model.py
 create a new rest_model.py which will be binary svm as rest class consisting of datas from calibration_data/pXrest folder  and not-rest class will be consisting datas from processed_data/pX (X=participant id) folder also window size would be 20, also feature extraction should be same as gesture_model.py
 rest_model should include load model,savemodel,train model(which is called in main.py train()) functions
+I have already created the base of the file I need implementation DO NOT FORGET THE RULES
 Create a list how this would be implemented to current system , which parts should be changed which parts should be added and where. 
 
 
