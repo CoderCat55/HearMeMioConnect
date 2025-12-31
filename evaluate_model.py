@@ -9,6 +9,7 @@ import glob
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.model_selection import StratifiedKFold
 from collections import Counter
 import sys
 
@@ -89,7 +90,70 @@ def predict_file(model, data):
     most_common = Counter(predictions).most_common(1)[0][0]
     return most_common
 
+def run_cross_validation(data_dir, k_folds=5):
+    """
+    Performs K-Fold Cross Validation to estimate real-world performance
+    without needing new external data.
+    """
+    print(f"\n" + "="*50)
+    print(f"STARTING {k_folds}-FOLD CROSS VALIDATION")
+    print("="*50)
+    
+    # 1. Load all data
+    X_all, y_all = load_test_data(data_dir)
+    if not X_all: return
+    
+    X_all = np.array(X_all, dtype=object) # Object array for variable length sequences
+    y_all = np.array(y_all)
+    
+    skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
+    fold_accuracies = []
+    
+    for fold, (train_idx, test_idx) in enumerate(skf.split(X_all, y_all)):
+        print(f"\n--- Fold {fold+1}/{k_folds} ---")
+        
+        # Prepare Training Data (Convert back to Dict format for GestureModel)
+        train_dict = {}
+        for i in train_idx:
+            label = y_all[i]
+            if label not in train_dict:
+                train_dict[label] = []
+            train_dict[label].append(X_all[i])
+            
+        # Train a FRESH model from scratch
+        model = GestureModel(window_size_ms=WINDOW_MS, sampling_rate=SAMPLING_RATE)
+        model.train(train_dict)
+        
+        # Test on the held-out fold
+        y_pred_fold = []
+        y_true_fold = []
+        
+        for i in test_idx:
+            pred = predict_file(model, X_all[i])
+            if pred:
+                y_pred_fold.append(pred)
+                y_true_fold.append(y_all[i])
+        
+        acc = accuracy_score(y_true_fold, y_pred_fold)
+        fold_accuracies.append(acc)
+        print(f"Fold {fold+1} Accuracy: {acc:.4f}")
+        
+    print("\n" + "="*50)
+    print(f"CROSS VALIDATION RESULTS")
+    print(f"Average Accuracy: {np.mean(fold_accuracies):.4f} (+/- {np.std(fold_accuracies):.4f})")
+    print("="*50)
+
 def main():
+    # Ask user for mode
+    print("Select Mode:")
+    print("1. Evaluate existing 'gesture_model.pkl' (Standard)")
+    print("2. Cross-Validation (Check true accuracy without new data)")
+    choice = input("Enter 1 or 2: ")
+
+    if choice == '2':
+        run_cross_validation(DATA_DIR)
+        return
+
     # 1. Load Model
     if not os.path.exists(MODEL_PATH):
         print(f"Error: Model '{MODEL_PATH}' not found.")
