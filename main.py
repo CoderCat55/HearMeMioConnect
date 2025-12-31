@@ -148,6 +148,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
     import time
     import numpy as np
     from multiprocessing import shared_memory
+    from collections import Counter
 
     # Attach to shared memory
     shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
@@ -168,12 +169,13 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
     
     last_position = 0
     # Calculate window sizes
-    rest_window_samples = 20   # 100ms * 200Hz = 20 samples  
+    rest_window_samples = 20   # 20 samples for Rest check
     # GestureModel uses 100ms windows (20 samples at 200Hz)
     gesture_window_samples = gesture_model.samples_per_window  # Should be 20
+    
     while True:
         if is_running_flag.value == 0:
-            time.sleep(0.01)
+            time.sleep(0.1)
             continue
         
         # Wait for new data
@@ -199,36 +201,75 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
             window_20ms = np.concatenate([part1, part2])
         
         is_rest = rest_model.predict(window_20ms)
-        result_queue.put(f"DEBUG: Rest={is_rest}, position={current_position}") 
+        # result_queue.put(f"DEBUG: Rest={is_rest}, position={current_position}") 
+        
         if is_rest:
             last_position = current_position
+            time.sleep(0.01) # Small sleep to save CPU when resting
             continue  # Rest position, skip classification
         
-        # Not rest - check if we have enough data for 100ms window (20 samples)
-        if current_position < gesture_model.samples_per_window:
-            continue
+        # --- HAREKET ALGILANDI (MOTION DETECTED) ---
+        # Buraya geldiğimizde Rest bitti, hareket başladı demektir.
+        # Kullanıcının isteği üzerine: Hemen sınıflandırma yapma, tamponun dolmasını bekle.
         
-        # Get last 100ms of data (20 samples)
-        end_idx_100 = current_position % STREAM_BUFFER_SIZE
-        start_idx_100 = (current_position - gesture_model.samples_per_window) % STREAM_BUFFER_SIZE
+        CAPTURE_DURATION_SEC = 1.5  # 1.5 saniye boyunca verinin birikmesini bekle
+        # result_queue.put("...Hareket algılandı, veri toplanıyor...")
+        time.sleep(CAPTURE_DURATION_SEC)
         
-        if start_idx_100 < end_idx_100:
-            window_100ms = stream_buffer[start_idx_100:end_idx_100].copy()
+        # Uyandıktan sonra güncel pozisyonu al
+        current_position = stream_index.value
+        samples_to_read = int(CAPTURE_DURATION_SEC * 200) # Yaklaşık 300 örnek
+        
+        # Tampondan son 1.5 saniyeyi (veya ne kadar biriktiyse) oku
+        end_idx_large = current_position % STREAM_BUFFER_SIZE
+        start_idx_large = (current_position - samples_to_read) % STREAM_BUFFER_SIZE
+        
+        large_window = None
+        if start_idx_large < end_idx_large:
+            large_window = stream_buffer[start_idx_large:end_idx_large].copy()
         else:
-            # Wrap around
-            part1 = stream_buffer[start_idx_100:]
-            part2 = stream_buffer[:end_idx_100]
-            window_100ms = np.concatenate([part1, part2])
+            part1 = stream_buffer[start_idx_large:]
+            part2 = stream_buffer[:end_idx_large]
+            large_window = np.concatenate([part1, part2])
         
-        # Extract features and classify
-        features_100ms = gesture_model.extract_features(window_100ms)
-        result = gesture_model.classify(features_100ms)
+        # --- MAJORITY VOTING (Çoğunluk Oylaması) ---
+        # 1.5 saniyelik veriyi 100ms'lik pencerelerle tara ve en çok çıkan sonucu bul.
+        predictions = []
+        step_size = 5 # 5 örnek kaydırarak git (daha hassas tarama için)
         
-        # Send result to main process
-        result_queue.put(result)
-        print(f"🎯 Detected: {result}")
+        if len(large_window) >= gesture_window_samples:
+            for i in range(0, len(large_window) - gesture_window_samples, step_size):
+                slice_window = large_window[i : i + gesture_window_samples]
+                features = gesture_model.extract_features(slice_window)
+                pred = gesture_model.classify(features)
+                predictions.append(pred)
         
-        last_position = current_position
+        if predictions:
+            # En çok tekrar eden tahmini bul
+            most_common_result = Counter(predictions).most_common(1)[0][0]
+            result_queue.put(f"🎯 SONUÇ: {most_common_result}")
+            print(f"🎯 Detected: {most_common_result}")
+        
+        # --- DEBOUNCE (Tekrarı Önleme) ---
+        # Hareket bitene (tekrar Rest olana) kadar bekle ki aynı hareket için 2. kez sonuç üretmesin.
+        while True:
+            current_pos_check = stream_index.value
+            # Son 20ms'ye bak
+            e_idx = current_pos_check % STREAM_BUFFER_SIZE
+            s_idx = (current_pos_check - rest_window_samples) % STREAM_BUFFER_SIZE
+            
+            check_window = None
+            if s_idx < e_idx:
+                check_window = stream_buffer[s_idx:e_idx]
+            else:
+                check_window = np.concatenate([stream_buffer[s_idx:], stream_buffer[:e_idx]])
+                
+            if rest_model.predict(check_window):
+                # Tekrar Rest oldu, döngüden çık ve ana döngüye dön
+                break
+            time.sleep(0.1) # Hala hareket devam ediyor, bekle
+            
+        last_position = stream_index.value
 """"""
 def Train():
     #Train both models - RestModel on ALL participants, GestureModel on segmented data"""
