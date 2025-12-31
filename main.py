@@ -216,8 +216,11 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
             if not is_rest:
                 # Gesture started!
                 gesture_active = True
-                gesture_buffer = [window_20ms]  # Start buffer with current window
-                gesture_start_position = current_position
+                gesture_buffer = []
+                # Add the 20 samples that triggered the detection
+                for sample in window_20ms:
+                    gesture_buffer.append(sample.copy())  # Each sample is (34,)
+                gesture_start_position = current_position - rest_window_samples
                 result_queue.put("🎬 Gesture started")
         else:
             # Gesture in progress
