@@ -18,6 +18,9 @@ CLASSIFICATION_DURATION = 3
 CALIBRATION_STARTS = 5 
 CLASSIFICATION_STARTS = 5 
 
+GESTURE_TIMEOUT_SAMPLES = 600  # 3 seconds max gesture duration at 200Hz
+MIN_GESTURE_SAMPLES = 20       # Minimum samples for valid gesture
+
 def data_acquisition_process(stream_mem_name, calib_mem_name, stream_index, 
                             calib_index, recording_flag, recording_gesture):
     """Process 1: Continuously acquires data from Myo armbands"""
@@ -143,16 +146,18 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
 """Calibrate funcitoan will be dealt with later"""
 
-def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM_BUFFER_SIZE):
-    #Process 2: Runs classification separately"""
+def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREAM_BUFFER_SIZE):
+    """Process 2: Runs classification separately with gesture segmentation"""
     import time
     import numpy as np
     from multiprocessing import shared_memory
+    from collections import Counter
 
     # Attach to shared memory
     shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
     result_queue.put("CLASSIFY: Shared memory attached") 
+    
     # Load both models
     rest_model = RestDetector(window_size=20) 
     if not rest_model.load_model('rest_model.pkl'):
@@ -167,13 +172,19 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
     result_queue.put("✓ Classification process ready!")
     
     last_position = 0
-    # Calculate window sizes
-    rest_window_samples = 20   # 100ms * 200Hz = 20 samples  
-    # GestureModel uses 100ms windows (20 samples at 200Hz)
-    gesture_window_samples = gesture_model.samples_per_window  # Should be 20
+    rest_window_samples = 20
+    gesture_window_samples = gesture_model.samples_per_window
+    
+    # NEW: Gesture segmentation state
+    gesture_active = False
+    gesture_buffer = []  # Accumulates samples during gesture
+    gesture_start_position = 0
+    
     while True:
         if is_running_flag.value == 0:
             time.sleep(0.01)
+            gesture_active = False  # Reset state when stopped
+            gesture_buffer = []
             continue
         
         # Wait for new data
@@ -182,54 +193,87 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
             time.sleep(0.001)
             continue
         
-        # Check if we have enough data for 20ms window (4 samples)
+        # Check if we have enough data for rest detection
         if current_position < rest_window_samples:
             continue
         
-        # Get last 20ms of data (4 samples)
+        # Get last 20 samples for rest detection
         end_idx = current_position % STREAM_BUFFER_SIZE
         start_idx = (current_position - rest_window_samples) % STREAM_BUFFER_SIZE
 
         if start_idx < end_idx:
             window_20ms = stream_buffer[start_idx:end_idx].copy()
         else:
-            # Wrap around
             part1 = stream_buffer[start_idx:]
             part2 = stream_buffer[:end_idx]
             window_20ms = np.concatenate([part1, part2])
         
         is_rest = rest_model.predict(window_20ms)
-        result_queue.put(f"DEBUG: Rest={is_rest}, position={current_position}") 
-        if is_rest:
-            last_position = current_position
-            continue  # Rest position, skip classification
         
-        # Not rest - check if we have enough data for 100ms window (20 samples)
-        if current_position < gesture_model.samples_per_window:
-            continue
-        
-        # Get last 100ms of data (20 samples)
-        end_idx_100 = current_position % STREAM_BUFFER_SIZE
-        start_idx_100 = (current_position - gesture_model.samples_per_window) % STREAM_BUFFER_SIZE
-        
-        if start_idx_100 < end_idx_100:
-            window_100ms = stream_buffer[start_idx_100:end_idx_100].copy()
+        # STATE MACHINE
+        if not gesture_active:
+            # Waiting for gesture to start
+            if not is_rest:
+                # Gesture started!
+                gesture_active = True
+                gesture_buffer = [window_20ms]  # Start buffer with current window
+                gesture_start_position = current_position
+                result_queue.put("🎬 Gesture started")
         else:
-            # Wrap around
-            part1 = stream_buffer[start_idx_100:]
-            part2 = stream_buffer[:end_idx_100]
-            window_100ms = np.concatenate([part1, part2])
-        
-        # Extract features and classify
-        features_100ms = gesture_model.extract_features(window_100ms)
-        result = gesture_model.classify(features_100ms)
-        
-        # Send result to main process
-        result_queue.put(result)
-        print(f"🎯 Detected: {result}")
+            # Gesture in progress
+            # Add new samples to buffer (avoid duplicates)
+            samples_to_add = current_position - last_position
+            for i in range(samples_to_add):
+                sample_idx = (last_position + i + 1) % STREAM_BUFFER_SIZE
+                gesture_buffer.append(stream_buffer[sample_idx].copy())
+            
+            # Check for gesture end or timeout
+            gesture_duration = current_position - gesture_start_position
+            
+            if is_rest:
+                # Gesture ended - classify accumulated data
+                result_queue.put(f"🎬 Gesture ended ({len(gesture_buffer)} samples)")
+                
+                if len(gesture_buffer) >= MIN_GESTURE_SAMPLES:
+                    # Convert buffer to numpy array
+                    gesture_data = np.array(gesture_buffer)
+                    
+                    # Apply sliding windows and classify
+                    predictions = []
+                    num_windows = (len(gesture_data) - gesture_window_samples) // gesture_model.stride + 1
+                    
+                    if num_windows > 0:
+                        for i in range(num_windows):
+                            start = i * gesture_model.stride
+                            end = start + gesture_window_samples
+                            window = gesture_data[start:end]
+                            
+                            features = gesture_model.extract_features(window)
+                            pred = gesture_model.classify(features)
+                            predictions.append(pred)
+                        
+                        # Majority voting
+                        most_common = Counter(predictions).most_common(1)[0]
+                        final_gesture = most_common[0]
+                        confidence = most_common[1] / len(predictions)
+                        
+                        result_queue.put(f"🎯 Detected: {final_gesture} (confidence: {confidence:.2f}, {len(predictions)} windows)")
+                    else:
+                        result_queue.put("⚠️ Gesture too short for classification")
+                else:
+                    result_queue.put(f"⚠️ Gesture too short ({len(gesture_buffer)} < {MIN_GESTURE_SAMPLES})")
+                
+                # Reset state
+                gesture_active = False
+                gesture_buffer = []
+                
+            elif gesture_duration > GESTURE_TIMEOUT_SAMPLES:
+                # Timeout - gesture too long
+                result_queue.put(f"⚠️ Gesture timeout ({gesture_duration} samples)")
+                gesture_active = False
+                gesture_buffer = []
         
         last_position = current_position
-""""""
 def Train():
     #Train both models - RestModel on ALL participants, GestureModel on segmented data"""
     import glob
