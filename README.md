@@ -18,11 +18,8 @@ calibrate
     triggers realtime data getting using mioconnect for a specified time then saves data to shared memory
 
 classification and commanding should run simulteneusly so I can start-stop classsification. I would prefer multiprocessing.
------------------ already done left to gain basic understanding of the system --------------------------
 
-My aim: 
-
- classification details :
+classification details :
 while is_running True
             check if the gesture is rest  with restmodel(model 1) window size 20 
             if gesture != rest
@@ -34,11 +31,25 @@ model1(the rest model) in rest_model1.py It can accurately recognize if a gestur
 
 model2(the classification model) will be trained on processed_data ,all the participants each gesture name as a class.
 
+----------------- already done left to gain basic understanding of the system --------------------------
 
 TODO:
-create a new rest_model.py which will be binary svm as rest class consisting of datas from calibration_data/pXrest folder  and not-rest class will be consisting datas from processed_data/pX (X=participant id) folder also window size would be 20, also feature extraction should be same as gesture_model.py
-rest_model should include load model,savemodel,train model(which is called in main.py train()) functions
-I have already created the base of the file I need implementation DO NOT FORGET THE RULES
+Currentlty model2 classifies a fixed amount of windowsize. What I want to do is capture the gesture datas betweeen two rest positions then pass it to model2 for feature enginering and classificaiton. So when position is not rest (the gesture is started) the datas will be copied into classification buffer and when position is rest again indicating the gesture has finished. The datas in the classification buffer will be given to gesture_model an result will be returned
+
+Lets critizse the framework at the bottom
+while is_runnning:
+    rest_model.predict()
+    if is_rest:
+        gstarted=False
+        continue
+    if !is_rest:
+        gstarted=True
+        while gstarted:
+            #save current data to classifcaiton buffer
+        #pass datas to gesture model
+
+
+DO NOT FORGET THE RULES
 Create a list how this would be implemented to current system , which parts should be changed which parts should be added and where. 
 
 
