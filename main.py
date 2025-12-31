@@ -152,28 +152,22 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
     import numpy as np
     from multiprocessing import shared_memory
     from collections import Counter
+    import importlib
 
     # Attach to shared memory
     shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
     result_queue.put("CLASSIFY: Shared memory attached") 
     
-    # Load both models
-    rest_model = RestDetector(window_size=20) 
-    if not rest_model.load_model('rest_model.pkl'):
-        result_queue.put("ERROR: Could not load rest_model.pkl")
-        return
+    # State variables
+    was_running = False
+    rest_model = None
+    gesture_model = None
     
-    gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
-    if not gesture_model.load_model('gesture_model.pkl'):
-        result_queue.put("ERROR: Could not load gesture_model.pkl")
-        return
-    
-    result_queue.put("✓ Classification process ready!")
-    
+    # Loop variables
     last_position = 0
     rest_window_samples = 20
-    gesture_window_samples = gesture_model.samples_per_window
+    gesture_window_samples = 20
     
     # NEW: Gesture segmentation state
     gesture_active = False
@@ -182,11 +176,45 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
     
     while True:
         if is_running_flag.value == 0:
-            time.sleep(0.01)
-            gesture_active = False  # Reset state when stopped
+            was_running = False
+            time.sleep(0.1)
+            gesture_active = False
             gesture_buffer = []
             continue
         
+        # Reload if just started (startcf command received)
+        if not was_running:
+            result_queue.put("🔄 Loading configuration and models...")
+            try:
+                import model_config
+                importlib.reload(model_config)
+                rest_window_size = getattr(model_config, 'rest_window_size', 20)
+                gesture_window_ms = getattr(model_config, 'window_size_ms', 100)
+                sampling_rate = getattr(model_config, 'sampling_rate', 200)
+            except Exception as e:
+                result_queue.put(f"Config import error: {e}. Using defaults.")
+                rest_window_size = 20
+                gesture_window_ms = 100
+                sampling_rate = 200
+
+            rest_model = RestDetector(window_size=rest_window_size) 
+            if not rest_model.load_model('rest_model.pkl'):
+                result_queue.put("ERROR: Could not load rest_model.pkl")
+                is_running_flag.value = 0
+                continue
+            
+            gesture_model = GestureModel(window_size_ms=gesture_window_ms, sampling_rate=sampling_rate)
+            if not gesture_model.load_model('gesture_model.pkl'):
+                result_queue.put("ERROR: Could not load gesture_model.pkl")
+                is_running_flag.value = 0
+                continue
+                
+            rest_window_samples = rest_window_size
+            gesture_window_samples = gesture_model.samples_per_window
+            last_position = stream_index.value
+            was_running = True
+            result_queue.put(f"✓ Ready! (Window: {gesture_window_ms}ms)")
+
         # Wait for new data
         current_position = stream_index.value
         if current_position <= last_position:
@@ -281,9 +309,23 @@ def Train():
     #Train both models - RestModel on ALL participants, GestureModel on segmented data"""
     import glob
     import os
+    import importlib
+    import model_config
     
     print("=== Training Models ===")
-    rest_model = RestDetector(window_size=20)
+    
+    try:
+        importlib.reload(model_config)
+        rest_window_size = getattr(model_config, 'rest_window_size', 20)
+        gesture_window_ms = getattr(model_config, 'window_size_ms', 100)
+        sampling_rate = getattr(model_config, 'sampling_rate', 200)
+    except Exception:
+        print("Warning: model_config.py error, using defaults.")
+        rest_window_size = 20
+        gesture_window_ms = 100
+        sampling_rate = 200
+        
+    rest_model = RestDetector(window_size=rest_window_size)
     rest_model.train() #burada datalar rest_model.py tarafından çağrıldığı için gesture_model kadar kod yok.
     rest_model.save_model('rest_model.pkl')
     print("✓ RestModel saved as rest_model.pkl (for real-time use)")
@@ -312,7 +354,10 @@ def Train():
     for gesture_name, samples in gesture_data.items():
         print(f"  - {gesture_name}: {len(samples)} samples")
     
-    gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
+    gesture_model = GestureModel(
+        window_size_ms=gesture_window_ms, 
+        sampling_rate=sampling_rate
+    )
     gesture_model.train(gesture_data)
     gesture_model.save_model('gesture_model.pkl')
     print("✓ GestureModel saved as gesture_model.pkl")
