@@ -30,23 +30,10 @@ we will have 2 models which they will need seperate classes restmodel and classi
 model1(the rest model) in rest_model1.py It can accurately recognize if a gesture is rest or not.
 
 model2(the classification model) will be trained on processed_data ,all the participants each gesture name as a class.
-
+Currentlty model2 classifies a fixed amount of windowsize. What I want to do is capture the gesture datas betweeen two rest positions then pass it to model2 for feature enginering and classificaiton. So when position is not rest (the gesture is started) the datas will be copied into classification buffer and when position is rest again indicating the gesture has finished. The datas in the classification buffer will be given to gesture_model an result will be returned
 ----------------- already done left to gain basic understanding of the system --------------------------
 
-TODO:
-Currentlty model2 classifies a fixed amount of windowsize. What I want to do is capture the gesture datas betweeen two rest positions then pass it to model2 for feature enginering and classificaiton. So when position is not rest (the gesture is started) the datas will be copied into classification buffer and when position is rest again indicating the gesture has finished. The datas in the classification buffer will be given to gesture_model an result will be returned
-
-Lets critizse the framework at the bottom
-while is_runnning:
-    rest_model.predict()
-    if is_rest:
-        gstarted=False
-        continue
-    if !is_rest:
-        gstarted=True
-        while gstarted:
-            #save current data to classifcaiton buffer
-        #pass datas to gesture model
+TODO:Debugging 
 
 
 DO NOT FORGET THE RULES
