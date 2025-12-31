@@ -9,8 +9,8 @@ import os
 import threading
 
 # Constants
-STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
-CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
+STREAM_BUFFER_SIZE = 1000  # ~20 seconds at 50Hz
+CALIBRATION_BUFFER_SIZE = 600  # 12 seconds at 50Hz
 
 CALIBRATION_DURATION = 3  
 CLASSIFICATION_DURATION = 3 
@@ -69,7 +69,7 @@ def get_calibration_buffer_from_shared_mem(calib_buffer, calib_index):
 def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION):
     """Read the last N seconds from the streaming buffer"""
     # Calculate how many samples we need
-    samples_per_second = 100  # Approximate (depends on actual rate)
+    samples_per_second = 50  # Approximate (depends on actual rate)
     num_samples = int(window_seconds * samples_per_second)
     
     # Get current position
@@ -160,7 +160,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
         result_queue.put("ERROR: Could not load rest_model.pkl")
         return
     
-    gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
+    gesture_model = GestureModel(window_size_ms=100, sampling_rate=50)
     if not gesture_model.load_model('gesture_model.pkl'):
         result_queue.put("ERROR: Could not load gesture_model.pkl")
         return
@@ -169,9 +169,9 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
     
     last_position = 0
     # Calculate window sizes
-    rest_window_samples = 20   # 20 samples for Rest check
-    # GestureModel uses 100ms windows (20 samples at 200Hz)
-    gesture_window_samples = gesture_model.samples_per_window  # Should be 20
+    rest_window_samples = 20   # 20 samples (400ms at 50Hz)
+    # GestureModel uses 100ms windows (5 samples at 50Hz)
+    gesture_window_samples = gesture_model.samples_per_window  # 5 samples
     
     while True:
         if is_running_flag.value == 0:
@@ -181,46 +181,45 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
         # Wait for new data
         current_position = stream_index.value
         if current_position <= last_position:
-            time.sleep(0.001)
+            time.sleep(0.01) # 50Hz = 20ms period, sleep 10ms is fine
             continue
         
-        # Check if we have enough data for 20ms window (4 samples)
+        # Check if we have enough data for rest window
         if current_position < rest_window_samples:
             continue
         
-        # Get last 20ms of data (4 samples)
+        # Get last rest window of data
         end_idx = current_position % STREAM_BUFFER_SIZE
         start_idx = (current_position - rest_window_samples) % STREAM_BUFFER_SIZE
 
         if start_idx < end_idx:
-            window_20ms = stream_buffer[start_idx:end_idx].copy()
+            window_rest = stream_buffer[start_idx:end_idx].copy()
         else:
             # Wrap around
             part1 = stream_buffer[start_idx:]
             part2 = stream_buffer[:end_idx]
-            window_20ms = np.concatenate([part1, part2])
+            window_rest = np.concatenate([part1, part2])
         
-        is_rest = rest_model.predict(window_20ms)
+        is_rest = rest_model.predict(window_rest)
         # result_queue.put(f"DEBUG: Rest={is_rest}, position={current_position}") 
         
         if is_rest:
             last_position = current_position
-            time.sleep(0.01) # Small sleep to save CPU when resting
+            time.sleep(0.02) # Sleep 20ms (approx 1 sample duration)
             continue  # Rest position, skip classification
         
         # --- HAREKET ALGILANDI (MOTION DETECTED) ---
-        # Buraya geldiğimizde Rest bitti, hareket başladı demektir.
-        # Kullanıcının isteği üzerine: Hemen sınıflandırma yapma, tamponun dolmasını bekle.
+        # Rest bitti, hareket başladı.
+        # Strateji: Tamponun dolması için bekle, sonra toplu oku ve oyla.
         
-        CAPTURE_DURATION_SEC = 1.5  # 1.5 saniye boyunca verinin birikmesini bekle
-        # result_queue.put("...Hareket algılandı, veri toplanıyor...")
+        CAPTURE_DURATION_SEC = 1.5 # 1.5 saniyelik veri topla (kelime süresi)
         time.sleep(CAPTURE_DURATION_SEC)
         
         # Uyandıktan sonra güncel pozisyonu al
         current_position = stream_index.value
-        samples_to_read = int(CAPTURE_DURATION_SEC * 200) # Yaklaşık 300 örnek
+        samples_to_read = int(CAPTURE_DURATION_SEC * 50) # 1.5 * 50Hz = 75 örnek
         
-        # Tampondan son 1.5 saniyeyi (veya ne kadar biriktiyse) oku
+        # Tampondan son 1.5 saniyeyi oku
         end_idx_large = current_position % STREAM_BUFFER_SIZE
         start_idx_large = (current_position - samples_to_read) % STREAM_BUFFER_SIZE
         
@@ -231,11 +230,10 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
             part1 = stream_buffer[start_idx_large:]
             part2 = stream_buffer[:end_idx_large]
             large_window = np.concatenate([part1, part2])
-        
-        # --- MAJORITY VOTING (Çoğunluk Oylaması) ---
-        # 1.5 saniyelik veriyi 100ms'lik pencerelerle tara ve en çok çıkan sonucu bul.
+            
+        # --- MAJORITY VOTING ---
         predictions = []
-        step_size = 5 # 5 örnek kaydırarak git (daha hassas tarama için)
+        step_size = 2 # 50Hz'de her 2 örnekte bir kaydır (daha sıkı tarama)
         
         if len(large_window) >= gesture_window_samples:
             for i in range(0, len(large_window) - gesture_window_samples, step_size):
@@ -245,16 +243,15 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
                 predictions.append(pred)
         
         if predictions:
-            # En çok tekrar eden tahmini bul
             most_common_result = Counter(predictions).most_common(1)[0][0]
             result_queue.put(f"🎯 SONUÇ: {most_common_result}")
             print(f"🎯 Detected: {most_common_result}")
-        
+            
         # --- DEBOUNCE (Tekrarı Önleme) ---
-        # Hareket bitene (tekrar Rest olana) kadar bekle ki aynı hareket için 2. kez sonuç üretmesin.
+        # Hareket bitene (tekrar Rest olana) kadar bekle
         while True:
             current_pos_check = stream_index.value
-            # Son 20ms'ye bak
+            # Son 20 örneğe (400ms) bak
             e_idx = current_pos_check % STREAM_BUFFER_SIZE
             s_idx = (current_pos_check - rest_window_samples) % STREAM_BUFFER_SIZE
             
@@ -265,9 +262,9 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
                 check_window = np.concatenate([stream_buffer[s_idx:], stream_buffer[:e_idx]])
                 
             if rest_model.predict(check_window):
-                # Tekrar Rest oldu, döngüden çık ve ana döngüye dön
+                # Tekrar Rest oldu, döngüden çık
                 break
-            time.sleep(0.1) # Hala hareket devam ediyor, bekle
+            time.sleep(0.1) # Hareket devam ediyor, bekle
             
         last_position = stream_index.value
 """"""
@@ -306,7 +303,7 @@ def Train():
     for gesture_name, samples in gesture_data.items():
         print(f"  - {gesture_name}: {len(samples)} samples")
     
-    gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
+    gesture_model = GestureModel(window_size_ms=100, sampling_rate=50)
     gesture_model.train(gesture_data)
     gesture_model.save_model('gesture_model.pkl')
     print("✓ GestureModel saved as gesture_model.pkl")

@@ -6,7 +6,7 @@ import pickle
 import os
 
 class GestureModel:
-    def __init__(self, window_size_ms=100, sampling_rate=200):
+    def __init__(self, window_size_ms=100, sampling_rate=50):
         self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale')
         self.scaler = StandardScaler()
         self.window_size_ms = window_size_ms
