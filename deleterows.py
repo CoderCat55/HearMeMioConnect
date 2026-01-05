@@ -49,10 +49,10 @@ import os
 import re
 
 # --- Constants ---
-EXCEL_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\croppeddata (6) - Kopya.xlsx"
-MAIN_FOLDER_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\calibration_data\p6"
-OUTPUT_FOLDER_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\deletedrows\p6"
-TEXT_LOG_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\deletedrows\deleted arrays\p6.txt"
+EXCEL_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\croppeddata (3) - Kopya.xlsx"
+MAIN_FOLDER_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\calibration_data\p3"
+OUTPUT_FOLDER_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\deletedrows\p3"
+TEXT_LOG_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\deletedrows\deleted arrays\p3.txt"
 
 def process_files():
     # Ensure output directory exists
@@ -78,6 +78,15 @@ def process_files():
         # Step B: Remove "grid_" from anywhere in the filename
         clean_filename = clean_filename.replace('grid_', '').strip()
         
+        # Step B: Remove "grid_" from anywhere in the filename
+        clean_filename = clean_filename.replace('.png', '').strip()
+
+        # Step B: Remove "grid_" from anywhere in the filename
+        clean_filename = clean_filename.replace('p2_', '').strip()
+
+        # Step B: Remove "grid_" from anywhere in the filename
+        clean_filename = clean_filename.replace('p3_', '').strip()
+
         # Ensure it has the .npy extension
         npy_filename = clean_filename if clean_filename.endswith('.npy') else f"{clean_filename}.npy"
         full_input_path = os.path.join(MAIN_FOLDER_PATH, npy_filename)
