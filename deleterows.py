@@ -49,10 +49,10 @@ import os
 import re
 
 # --- Constants ---
-EXCEL_PATH = r"C:\Users\Bemol\Desktop\deneme.xlsx"
-MAIN_FOLDER_PATH = r"C:\Users\Bemol\Desktop\denemeeee\p4"
-OUTPUT_FOLDER_PATH = r"C:\Users\Bemol\Desktop\deletedrows\p4"
-TEXT_LOG_PATH = r"C:\Users\Bemol\Desktop\deneme1.txt"
+EXCEL_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\croppeddata (6) - Kopya.xlsx"
+MAIN_FOLDER_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\calibration_data\p6"
+OUTPUT_FOLDER_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\deletedrows\p6"
+TEXT_LOG_PATH = r"C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\deletedrows\deleted arrays\p6.txt"
 
 def process_files():
     # Ensure output directory exists
