@@ -36,7 +36,7 @@ Currentlty model2 classifies a fixed amount of windowsize. What I want to do is 
 TODO:Debugging 
 
 Version:
-1.1
+1.2
 
 DO NOT FORGET THE RULES
 Create a list how this would be implemented to current system , which parts should be changed which parts should be added and where. 

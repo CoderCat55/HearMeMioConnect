@@ -292,7 +292,7 @@ def Train():
     print("\n2. Training GestureModel on segmented gesture data...")
     gesture_data = {}
     for participant_id in range(1, 7):
-        folder = f'processed_data/p{participant_id}'
+        folder = f'deletedrows/p{participant_id}'
         if not os.path.exists(folder):
             print(f"Warning: {folder} not found, skipping...")
             continue
