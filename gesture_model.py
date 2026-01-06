@@ -5,6 +5,8 @@ import numpy as np
 import pickle
 import os
 
+
+
 class GestureModel:
     def __init__(self, window_size_ms=100, sampling_rate=200):
         self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale')
