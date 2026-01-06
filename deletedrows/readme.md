@@ -1,0 +1,1 @@
+calibration datalar alındı ve rest ksımları silindi excel tablolarına göre 

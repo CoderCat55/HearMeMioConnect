@@ -1,0 +1,1 @@
+kullanıcılardan toplanmış başında veya sonunda veya her ikisinde de rest olabilen datalar

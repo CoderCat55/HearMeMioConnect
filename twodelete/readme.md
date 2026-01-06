@@ -1,0 +1,1 @@
+deletedrow folderindaki dataların bazılarında hareketler ekdikti onların silinmiş hali
