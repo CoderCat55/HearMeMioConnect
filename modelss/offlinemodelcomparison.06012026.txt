@@ -1,0 +1,41 @@
+OFFLINE MODEL KARŞILAŞTIRMA RAPORU - 06/01/2026 17:30
+==========================================================================================
+Model Adı                 | Doğruluk   | Hiperparametreler
+------------------------------------------------------------------------------------------
+Decision Tree             |    69.29% | DecisionTreeClassifier(random_state=42)
+Logistic Regression       |    81.34% | LogisticRegression(max_iter=1000, random_state=42)
+K-Nearest Neighbors       |    79.45% | KNeighborsClassifier(n_jobs=-1)
+Support Vector Machine    |    84.91% | SVC(random_state=42)
+Random Forest             |    93.92% | RandomForestClassifier(n_jobs=-1, random_state=42)
+
+==========================================================================================
+>>> EN İYİ MODEL: Random Forest
+
+Detailed Classification Report:
+              precision    recall  f1-score   support
+
+         bek       0.98      0.90      0.94        50
+         ben       0.98      0.93      0.95        44
+         bug       0.78      0.88      0.83        41
+         cal       0.89      0.87      0.88        46
+         dur       0.98      1.00      0.99        48
+          ev       0.98      0.98      0.98        47
+         evt       0.91      0.98      0.94        43
+         git       0.97      0.77      0.86        43
+         han       0.93      0.93      0.93        44
+        hast       0.98      0.96      0.97        50
+         hyr       0.91      0.93      0.92        42
+         ist       1.00      0.98      0.99        42
+     merhaba       0.90      0.98      0.93        44
+          ne       0.87      0.93      0.90        44
+           o       0.93      0.88      0.90        42
+         oto       0.98      0.96      0.97        45
+        rest       1.00      1.00      1.00        61
+         sen       0.89      0.94      0.91        34
+         tsk       0.88      0.94      0.91        54
+         yar       1.00      0.95      0.97        41
+         yrd       1.00      1.00      1.00        49
+
+    accuracy                           0.94       954
+   macro avg       0.94      0.94      0.94       954
+weighted avg       0.94      0.94      0.94       954

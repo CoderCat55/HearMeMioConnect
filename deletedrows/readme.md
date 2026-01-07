@@ -1,1 +1,1 @@
-calibration datalar alındı ve rest ksımları silindi excel tablolarına göre 
+calibration datalar alındı ve rest ksımları silindi excel tablolarına göre excel tabloları deleted arraysin içinde
