@@ -2,7 +2,7 @@ import os
 import shutil
 
 # Ana dizin yolu
-root_folder = r'C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\twodelete'
+root_folder = r'C:\Users\Bemol\Documents\GitHub\HearMeMioConnect\deletedrows'
 
 # Katılımcı klasörlerini listele (sadece dizin olanları ve gizli olmayanları al)
 try:
