@@ -13,6 +13,7 @@ import sys
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
@@ -133,6 +134,7 @@ class GestureClassifier:
         print(f"\n{'='*20} {model_name} Modeli Eğitiliyor {'='*20}")
         
         # Grid Search Başlat
+        # n_jobs=-1 işlemcinin tüm çekirdeklerini kullanır, verbose eğitim detaylarını gösterir
         grid = GridSearchCV(estimator=model_obj, param_grid=params, 
                             cv=3, n_jobs=-1, scoring='accuracy', verbose=1)
         grid.fit(X_train, y_train)
@@ -153,6 +155,8 @@ class GestureClassifier:
             f.write("-" * 100 + "\n")
             
             results = grid.cv_results_
+            # Sonuçları skora göre sıralamak yerine varsayılan sırayla yazıyoruz, 
+            # ancak rank_test_score hangisinin iyi olduğunu gösterir.
             for i in range(len(results['params'])):
                 rank = results['rank_test_score'][i]
                 mean_acc = results['mean_test_score'][i]
@@ -207,17 +211,29 @@ class GestureClassifier:
         
         date_str = datetime.now().strftime("%d%m%Y_%H%M")
         
-        # --- MODEL KONFİGÜRASYONLARI ---
+        # --- MODEL KONFİGÜRASYONLARI (5 MODEL) ---
         models_config = [
+            # 1. RANDOM FOREST
+            {
+                "name": "RandomForest",
+                "model": RandomForestClassifier(random_state=42),
+                "params": {
+                    'n_estimators': [50, 100, 150, 200],  # Ağaç Sayısı
+                    'max_depth': [None, 10, 20],          # Derinlik
+                    'min_samples_split': [2, 5]
+                }
+            },
+            # 2. SVM
             {
                 "name": "SVM",
                 "model": SVC(random_state=42),
                 "params": {
-                    'C': [0.1, 1, 10, 100],
-                    'kernel': ['linear', 'rbf', 'poly'],
+                    'C': [0.1, 1, 10, 100],               # Regularization
+                    'kernel': ['linear', 'rbf'],          # Dönüşüm tipi
                     'gamma': ['scale', 'auto']
                 }
             },
+            # 3. XGBoost
             {
                 "name": "XGBoost",
                 "model": XGBClassifier(use_label_encoder=False, eval_metric='mlogloss', random_state=42),
@@ -227,6 +243,7 @@ class GestureClassifier:
                     'learning_rate': [0.01, 0.1, 0.2]
                 }
             },
+            # 4. CatBoost
             {
                 "name": "CatBoost",
                 "model": CatBoostClassifier(verbose=0, random_state=42),
@@ -236,11 +253,12 @@ class GestureClassifier:
                     'learning_rate': [0.01, 0.1]
                 }
             },
+            # 5. K-NN
             {
                 "name": "K-NN",
                 "model": KNeighborsClassifier(),
                 "params": {
-                    'n_neighbors': [3, 5, 7, 9, 11],
+                    'n_neighbors': [3, 5, 7, 9, 11],     # K Değerleri
                     'weights': ['uniform', 'distance'],
                     'metric': ['euclidean', 'manhattan']
                 }
@@ -267,15 +285,20 @@ class GestureClassifier:
         results_df = pd.DataFrame(final_results)
         print(results_df)
 
-        plt.figure(figsize=(10, 6))
-        sns.barplot(x="Model", y="Accuracy", data=results_df, palette="viridis")
-        plt.title(f"Model Karşılaştırması - {date_str}")
+        plt.figure(figsize=(12, 6))
+        sns.barplot(x="Model", y="Accuracy", data=results_df, palette="magma")
+        plt.title(f"Model Performans Karşılaştırması - {date_str}")
+        plt.ylabel("Accuracy Score")
         plt.ylim(0, 1.05)
-        for index, row in results_df.iterrows():
-            plt.text(index, row.Accuracy + 0.01, f"%{row.Accuracy*100:.1f}", color='black', ha="center")
         
-        plt.savefig(f"Final_Model_Comparison_{date_str}.png")
-        print(f"Karşılaştırma grafiği kaydedildi: Final_Model_Comparison_{date_str}.png")
+        # Çubukların üzerine değerleri yaz
+        for index, row in results_df.iterrows():
+            plt.text(index, row.Accuracy + 0.01, f"%{row.Accuracy*100:.1f}", color='black', ha="center", fontweight='bold')
+        
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.savefig(f"Final_5_Models_Comparison_{date_str}.png")
+        print(f"Karşılaştırma grafiği kaydedildi: Final_5_Models_Comparison_{date_str}.png")
+        # plt.show() # Eğer sunucuda çalışmıyorsa bu satır hata verebilir, yerelde çalışıyorsanız açabilirsiniz.
 
 if __name__ == "__main__":
     clf = GestureClassifier()
