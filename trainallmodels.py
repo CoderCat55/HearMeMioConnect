@@ -64,7 +64,7 @@ def load_data():
         if not os.path.exists(folder):
             continue
         
-        files = glob.glob(f'{folder}/*.npy')
+        files = glob.glob(f'{folder}/*/*.npy')
         for file in files:
             basename = os.path.basename(file)
             # Dosya adı formatı: gesturename_timestamp.npy
