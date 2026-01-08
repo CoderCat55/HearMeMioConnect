@@ -123,7 +123,7 @@ def main():
         "SVM": {
             "model": SVC(random_state=42),
             "params": {
-                'C': [0.1, 1, 10, 100],
+                'C': [0.1, 1, 10,],
                 'kernel': ['linear', 'rbf', 'poly'],
                 'gamma': ['scale', 'auto']
             }
@@ -211,6 +211,7 @@ def main():
             f.write("-" * 50 + "\n")
             f.write(f"Best Params: {grid.best_params_}\n")
             f.write(f"Accuracy: {acc:.4f}\n\n")
+
             f.write("Classification Report:\n")
             f.write(classification_report(y_test, y_pred, target_names=classes))
             
