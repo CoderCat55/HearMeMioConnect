@@ -1,0 +1,34 @@
+MODEL: Random Forest
+Tarih: 07012026_1246
+--------------------------------------------------
+Best Params: {'max_depth': None, 'min_samples_split': 2, 'n_estimators': 200}
+Accuracy: 0.9772
+
+Classification Report:
+              precision    recall  f1-score   support
+
+         bek       0.98      0.95      0.97       276
+         ben       0.98      1.00      0.99       245
+         bug       0.96      0.97      0.96       242
+         cal       0.96      0.98      0.97       256
+         dur       0.99      0.97      0.98       270
+          ev       0.99      0.95      0.97       259
+         evt       0.96      0.99      0.98       244
+         git       0.97      0.98      0.98       242
+         han       0.98      0.95      0.96       252
+        hast       0.99      0.99      0.99       276
+         hyr       0.98      0.97      0.98       239
+         ist       0.98      0.98      0.98       235
+     merhaba       1.00      1.00      1.00       248
+          ne       0.96      1.00      0.98       245
+           o       0.97      0.96      0.96       241
+         oto       0.99      0.98      0.99       255
+        rest       0.99      1.00      0.99       208
+         sen       0.98      0.96      0.97       237
+         tsk       0.96      0.98      0.97       303
+         yar       0.97      0.99      0.98       249
+         yrd       0.97      0.99      0.98       274
+
+    accuracy                           0.98      5296
+   macro avg       0.98      0.98      0.98      5296
+weighted avg       0.98      0.98      0.98      5296
