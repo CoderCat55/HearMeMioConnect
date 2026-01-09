@@ -1,24 +1,58 @@
 # gesture_model.py
-from sklearn import svm
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pickle
 import os
 
-
-
 class GestureModel:
     def __init__(self, window_size_ms=100, sampling_rate=200):
-        self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale')
+        self.model = RandomForestClassifier(max_depth=None, min_samples_split=2, n_estimators=200)
         self.scaler = StandardScaler()
         self.window_size_ms = window_size_ms
         self.sampling_rate = sampling_rate
         self.gesture_labels = []
-        
+
         # Calculate samples per window
         self.samples_per_window = int((window_size_ms / 1000) * sampling_rate)  # 20 samples
         self.stride = self.samples_per_window // 2  # 50% overlap = 10 samples stride
+
+    @staticmethod
+    def load_nested_data(base_path):
+        """
+        Yeni eklenen yardımcı fonksiyon:
+        Klasör yapısını (base_path -> pX -> gesture_name -> *.npy) tarar.
+        """
+        gesture_data_dict = {}
         
+        if not os.path.exists(base_path):
+            print(f"Hata: {base_path} dizini bulunamadı!")
+            return gesture_data_dict
+
+        print(f"Veriler taranıyor: {base_path}...")
+        
+        # 1. Seviye: Katılımcı klasörleri (p1, p2...)
+        for p_folder in os.listdir(base_path):
+            p_path = os.path.join(base_path, p_folder)
+            if os.path.isdir(p_path):
+                # 2. Seviye: Jest klasörleri (yumruk, acik_el...)
+                for gesture_name in os.listdir(p_path):
+                    gesture_path = os.path.join(p_path, gesture_name)
+                    if os.path.isdir(gesture_path):
+                        # 3. Seviye: .npy dosyaları
+                        for file in os.listdir(gesture_path):
+                            if file.endswith(".npy"):
+                                file_path = os.path.join(gesture_path, file)
+                                try:
+                                    data = np.load(file_path)
+                                    if gesture_name not in gesture_data_dict:
+                                        gesture_data_dict[gesture_name] = []
+                                    gesture_data_dict[gesture_name].append(data)
+                                except Exception as e:
+                                    print(f"Dosya okunamadı {file}: {e}")
+        
+        return gesture_data_dict
+
     @staticmethod
     def extract_features(time_series_data):
         """
@@ -72,7 +106,7 @@ class GestureModel:
         # Normalize features
         X_scaled = self.scaler.fit_transform(X)
         
-        # Train SVM
+        # Train SVM (RandomForestClassifier used here)
         self.model.fit(X_scaled, y)
         
         print("GestureModel training complete!")

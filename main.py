@@ -278,47 +278,35 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
         
         last_position = current_position
 def Train():
-    #Train both models - RestModel on ALL participants, GestureModel on segmented data"""
-    import glob
-    import os
-    
     print("=== Training Models ===")
+    
+    # 1. RestModel (Olduğu gibi kalabilir)
     rest_model = RestDetector(window_size=20)
-    rest_model.train() #burada datalar rest_model.py tarafından çağrıldığı için gesture_model kadar kod yok.
+    rest_model.train() 
     rest_model.save_model('rest_model.pkl')
-    print("✓ RestModel saved as rest_model.pkl (for real-time use)")
+    print("✓ RestModel kaydedildi.")
     
-    # Train GestureModel on segmented data from participant folders
-    print("\n2. Training GestureModel on segmented gesture data...")
-    gesture_data = {}
-    for participant_id in range(1, 7):
-        folder = f'deletedrows/p{participant_id}'
-        if not os.path.exists(folder):
-            print(f"Warning: {folder} not found, skipping...")
-            continue
-        
-        files = glob.glob(f'{folder}/*.npy')
-        for file in files:
-            basename = os.path.basename(file)
-            gesture_name = basename.split('_')[0]
-            
-            if gesture_name not in gesture_data:
-                gesture_data[gesture_name] = []
-            
-            gesture_data[gesture_name].append(np.load(file))
+    # 2. GestureModel (DEĞİŞEN KISIM BURASI)
+    print("\n2. GestureModel eğitiliyor...")
     
+    # Kendi yazdığımız yeni yükleme metodunu çağırıyoruz
+    gesture_data = GestureModel.load_nested_data('deletedrows')
     
-    print(f"Found {len(gesture_data)} gesture types:")
+    if not gesture_data:
+        print("HATA: 'deletedrows' klasöründe veri bulunamadı!")
+        return False
+
+    # Veri özetini yazdıralım (Hangi jestten kaç tane var?)
+    print(f"Toplam {len(gesture_data)} farklı jest bulundu:")
     for gesture_name, samples in gesture_data.items():
-        print(f"  - {gesture_name}: {len(samples)} samples")
+        print(f"  - {gesture_name}: {len(samples)} dosya")
     
+    # Modeli eğitme ve kaydetme
     gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
     gesture_model.train(gesture_data)
     gesture_model.save_model('gesture_model.pkl')
-    print("✓ GestureModel saved as gesture_model.pkl")
     
-    print("\n=== Training Complete! ===")
-    print("Models ready for real-time classification")
+    print("\n=== Eğitim Tamamlandı! ===")
     return True
 
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
