@@ -57,6 +57,7 @@ class RestDetector:
         for participant_id in range(1, 7):
             folder = f'rows_deleted/p{participant_id}'
             if os.path.exists(folder):
+                files = glob.glob(f'{folder}/*.npy') 
                 # FILTER: only files NOT starting with "rest"
                 files = [f for f in files if not os.path.basename(f).startswith('rest')]
                 for file in files:
