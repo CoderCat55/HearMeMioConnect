@@ -175,29 +175,29 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
     rest_window_samples = 20
     gesture_window_samples = gesture_model.samples_per_window
     
-    # NEW: Gesture segmentation state
+    # Gesture segmentation state
     gesture_active = False
     gesture_buffer = []  # Accumulates samples during gesture
     gesture_start_position = 0
     
     while True:
+        # Stop/reset if classification is paused
         if is_running_flag.value == 0:
-            time.sleep(0.01)
-            gesture_active = False  # Reset state when stopped
+            gesture_active = False
             gesture_buffer = []
+            last_position = stream_index.value  # reset to current index to avoid ghost gestures
+            time.sleep(0.01)
             continue
         
         # Wait for new data
         current_position = stream_index.value
-        if current_position <= last_position:
+        if current_position == last_position:
             time.sleep(0.001)
             continue
         
-        # Check if we have enough data for rest detection
+        # Get last 20 samples for rest detection (with wrap-around)
         if current_position < rest_window_samples:
             continue
-        
-        # Get last 20 samples for rest detection
         end_idx = current_position % STREAM_BUFFER_SIZE
         start_idx = (current_position - rest_window_samples) % STREAM_BUFFER_SIZE
 
@@ -212,71 +212,56 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
         
         # STATE MACHINE
         if not gesture_active:
-            # Waiting for gesture to start
             if not is_rest:
-                # Gesture started!
+                # Gesture started
                 gesture_active = True
-                gesture_buffer = []
-                # Add the 20 samples that triggered the detection
-                for sample in window_20ms:
-                    gesture_buffer.append(sample.copy())  # Each sample is (34,)
+                gesture_buffer = [s.copy() for s in window_20ms]  # copy trigger samples
                 gesture_start_position = current_position - rest_window_samples
                 result_queue.put("🎬 Gesture started")
         else:
-            # Gesture in progress
-            # Add new samples to buffer (avoid duplicates)
+            # Add new samples
             samples_to_add = current_position - last_position
-            for i in range(samples_to_add):
-                sample_idx = (last_position + i + 1) % STREAM_BUFFER_SIZE
-                gesture_buffer.append(stream_buffer[sample_idx].copy())
+            for i in range(1, samples_to_add + 1):
+                idx = (last_position + i) % STREAM_BUFFER_SIZE
+                gesture_buffer.append(stream_buffer[idx].copy())
             
-            # Check for gesture end or timeout
             gesture_duration = current_position - gesture_start_position
             
-            if is_rest:
-                # Gesture ended - classify accumulated data
-                result_queue.put(f"🎬 Gesture ended ({len(gesture_buffer)} samples)")
+            if is_rest or gesture_duration > GESTURE_TIMEOUT_SAMPLES:
+                if is_rest:
+                    result_queue.put(f"🎬 Gesture ended ({len(gesture_buffer)} samples)")
+                else:
+                    result_queue.put(f"⚠️ Gesture timeout ({gesture_duration} samples)")
                 
-                if len(gesture_buffer) >= MIN_GESTURE_SAMPLES:
-                    # Convert buffer to numpy array
+                if len(gesture_buffer) >= MIN_GESTURE_SAMPLES and is_rest:
                     gesture_data = np.array(gesture_buffer)
-                    
-                    # Apply sliding windows and classify
                     predictions = []
                     num_windows = (len(gesture_data) - gesture_window_samples) // gesture_model.stride + 1
-                    
                     if num_windows > 0:
                         for i in range(num_windows):
                             start = i * gesture_model.stride
                             end = start + gesture_window_samples
                             window = gesture_data[start:end]
-                            
                             features = gesture_model.extract_features(window)
                             pred = gesture_model.classify(features)
                             predictions.append(pred)
-                        
-                        # Majority voting
                         most_common = Counter(predictions).most_common(1)[0]
                         final_gesture = most_common[0]
                         confidence = most_common[1] / len(predictions)
-                        
                         result_queue.put(f"🎯 Detected: {final_gesture} (confidence: {confidence:.2f}, {len(predictions)} windows)")
                     else:
                         result_queue.put("⚠️ Gesture too short for classification")
-                else:
+                elif is_rest:
                     result_queue.put(f"⚠️ Gesture too short ({len(gesture_buffer)} < {MIN_GESTURE_SAMPLES})")
                 
-                # Reset state
-                gesture_active = False
-                gesture_buffer = []
-                
-            elif gesture_duration > GESTURE_TIMEOUT_SAMPLES:
-                # Timeout - gesture too long
-                result_queue.put(f"⚠️ Gesture timeout ({gesture_duration} samples)")
+                # Reset gesture state
                 gesture_active = False
                 gesture_buffer = []
         
         last_position = current_position
+
+
+
 def Train():
     #Train both models - RestModel on ALL participants, GestureModel on segmented data"""
     import glob
@@ -297,7 +282,7 @@ def Train():
             print(f"Warning: {folder} not found, skipping...")
             continue
         
-        files = glob.glob(f'{folder}/*.npy')
+        files = glob.glob(f'{folder}/**/*.npy', recursive=True)
         for file in files:
             basename = os.path.basename(file)
             gesture_name = basename.split('_')[0]
