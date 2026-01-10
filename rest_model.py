@@ -50,10 +50,10 @@ class RestDetector:
                     rest_samples.append(data)
                     print(f"  ✓ Loaded: {os.path.basename(file)} (shape: {data.shape})")
         
-        print(f"\nLoading non-rest data from processed_data/p{{1-6}}...")
+        print(f"\nLoading non-rest data from rows_deleted/p{{1-6}}...")
         not_rest_samples = []
         for participant_id in range(1, 7):
-            folder = f'processed_data/p{participant_id}'
+            folder = f'rows_deleted/p{participant_id}'
             if os.path.exists(folder):
                 files = glob.glob(f'{folder}/*.npy')
                 for file in files:

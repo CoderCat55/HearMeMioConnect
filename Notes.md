@@ -1,0 +1,1 @@
+Processed data yerine yogurt_duzelt_n 'deki rows_delted klasörünü ekledim
