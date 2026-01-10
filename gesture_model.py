@@ -5,6 +5,8 @@ from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pickle
 import os
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 class GestureModel:
     def __init__(self, window_size_ms=100, sampling_rate=200):
@@ -38,6 +40,7 @@ class GestureModel:
             ])
         return np.array(features)
     
+    
     def train(self, gesture_data_dict):
         """
         Train on segmented gesture data from calibration_data/pXnew
@@ -66,17 +69,29 @@ class GestureModel:
         
         X = np.array(X)
         y = np.array(y)
+
+        # VERİYİ BÖLME İŞLEMİ BURADA YAPILIYOR:
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import accuracy_score
         
-        print(f"Training GestureModel on {len(X)} windows from {len(self.gesture_labels)} gestures...")
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
         
-        # Normalize features
-        X_scaled = self.scaler.fit_transform(X)
+        # Sadece eğitim verisiyle ölçeklendirme yapıyoruz
+        X_train_scaled = self.scaler.fit_transform(X_train)
+        X_test_scaled = self.scaler.transform(X_test)
         
-        # Train RF
-        self.model.fit(X_scaled, y)
+        # Eğitim
+        self.model.fit(X_train_scaled, y_train)
         
-        print("GestureModel training complete!")
-        return True
+        # Başarıyı test etme
+        y_pred = self.model.predict(X_test_scaled)
+        accuracy = accuracy_score(y_test, y_pred)
+        
+        print(f"Model Accuracy: %{accuracy * 100:.2f}")
+        return accuracy
+
     
     def classify(self, features):
         """
