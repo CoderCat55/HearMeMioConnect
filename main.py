@@ -249,6 +249,7 @@ def Train():
         if not os.path.exists(folder):
             print(f"Warning: {folder} not found, skipping...")
             continue
+        files = glob.glob(f'{folder}/*.npy')
         # FILTER: only files NOT starting with "rest"
         files = [f for f in files if not os.path.basename(f).startswith('rest')]
         for file in files:
