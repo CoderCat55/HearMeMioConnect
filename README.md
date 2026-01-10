@@ -30,10 +30,10 @@ model1(the rest model) in rest_model1.py It can accurately recognize if a gestur
 
 TODO:
 example numpy array path : rows_deleted\p1\bek_1765449146.npy
-1) gesture model should train on processed_data/p{1-6}/all npy arrays that dont start with "rest"
+1) gesture model should train on rows_deleted/p{1-6}/all npy arrays that dont start with "rest"
 2) Rest model should be like this:
-- rest class: processed_data/p{1-6}/all npy arrays that start with "rest"
-- non-rest class: processed_data/p{1-6}/all npy arrays that dont start with "rest"
+- rest class: rows_deleted/p{1-6}/all npy arrays that start with "rest"
+- non-rest class: rows_deleted/p{1-6}/all npy arrays that dont start with "rest"
 
 
 DO NOT FORGET THE RULES
