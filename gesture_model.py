@@ -1,5 +1,6 @@
 # gesture_model.py
 from sklearn import svm
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pickle
@@ -7,7 +8,8 @@ import os
 
 class GestureModel:
     def __init__(self, window_size_ms=100, sampling_rate=200):
-        self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale')
+        # İstediğiniz RandomForest parametreleri
+        self.model = RandomForestClassifier(max_depth=None, min_samples_split=2, n_estimators=200)
         self.scaler = StandardScaler()
         self.window_size_ms = window_size_ms
         self.sampling_rate = sampling_rate
@@ -70,7 +72,7 @@ class GestureModel:
         # Normalize features
         X_scaled = self.scaler.fit_transform(X)
         
-        # Train SVM
+        # Train RF
         self.model.fit(X_scaled, y)
         
         print("GestureModel training complete!")
