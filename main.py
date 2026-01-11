@@ -181,6 +181,89 @@ def Train(classifier):
     else:
         print("Training failed! Make sure you have calibration data.")
 
+    """
+    def samplerate()
+aim of this code is to debug and understand the current data sampling hz
+
+show when datas are receivedd and ms between them and each " sec show the hz 
+after keyboard interrupt save these into a file named= day,month by letters January=jan,keybordinterrupttime hour_minute 14jan20_12
+# Rules
+*Please really read all the code. 
+*Do not make assumptions while answering. 
+*While giving ansswers include the chain of thought, why did you make that assumption, which part of thee code leads you to that? If you are not sure about how something works just tell me.
+*Your aim is to discuss the structure with me. I need you to be objective. You should use strategies like listing pros and cons of a situation and judge it according to my aim.
+*When change of code only change what is relevant do not try to change anything that is not relevant with my aim. 
+*I need to know which parts you have made changes tell me because sometimes you change something inside a fucntion which I am not aware of.
+*You may only write which parts of the code I should change and where changes shhould be made to save time instead of writing the whole script again.
+"""
+def samplerate(stream_index):
+    """
+    Debugs and understands the current data sampling Hz by polling the shared index.
+    """
+    import datetime
+    
+    print("\n--- Sampling Rate Debugger ---")
+    print("Press Ctrl+C to stop and save results.")
+    
+    log_data = []
+    last_idx = stream_index.value
+    last_time = time.time()
+    start_session_time = last_time
+    
+    # For Hz calculation
+    hz_start_time = last_time
+    samples_since_last_hz = 0
+    
+    try:
+        while True:
+            current_idx = stream_index.value
+            
+            if current_idx != last_idx:
+                current_time = time.time()
+                
+                # Calculate how many samples were added (handling wrap-around)
+                samples_added = (current_idx - last_idx) % STREAM_BUFFER_SIZE
+                
+                # Calculate ms since last update
+                delta_ms = (current_time - last_time) * 1000
+                
+                print(f"Received: {samples_added} samples | Gap: {delta_ms:.2f}ms")
+                
+                # Store for file saving
+                log_data.append(f"{current_time}, {samples_added}, {delta_ms:.2f}")
+                
+                # Accumulate for Hz
+                samples_since_last_hz += samples_added
+                last_idx = current_idx
+                last_time = current_time
+                
+                # Every 1 second, show the Hz
+                if (current_time - hz_start_time) >= 1.0:
+                    actual_hz = samples_since_last_hz / (current_time - hz_start_time)
+                    print(f"\n>>> CURRENT HZ: {actual_hz:.2f} <<< \n")
+                    samples_since_last_hz = 0
+                    hz_start_time = current_time
+            
+            # Tiny sleep to prevent 100% CPU usage while polling
+            time.sleep(0.001)
+
+    except KeyboardInterrupt:
+        print("\nStopping samplerate debug...")
+        
+        # File naming logic: day, month by letters, hour_minute
+        now = datetime.datetime.now()
+        month_str = now.strftime("%b").lower() # e.g., 'jan'
+        # Format: 14jan20_12
+        filename = now.strftime(f"%d{month_str}%H_%M.txt")
+        
+        try:
+            with open(filename, "w") as f:
+                f.write("Timestamp, Samples_Added, Delta_MS\n")
+                f.write("\n".join(log_data))
+            print(f"Stats saved to: {filename}")
+        except Exception as e:
+            print(f"Failed to save file: {e}")
+
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
            recording_flag, recording_gesture, classifier):
     value = input("Enter your command majesty: ")
@@ -211,6 +294,9 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             print("\n")
             print("Classifying gesture...")
             LiveClassify()
+        case "sr": 
+            print("jetzt rechnen wir samplerate")
+            samplerate(stream_index)
         case _:
             print("Invalid command! Use: tr, cf, cb, or live")
 
