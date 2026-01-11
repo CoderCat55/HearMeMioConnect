@@ -9,18 +9,17 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
 class GestureModel:
-    def __init__(self, window_size_ms=100, sampling_rate=200):
+    def __init__(self, window_size_samples, sampling_rate):
         # İstediğiniz RandomForest parametreleri
         self.model = RandomForestClassifier(max_depth=None, min_samples_split=2, n_estimators=200)
         self.scaler = StandardScaler()
-        self.window_size_ms = window_size_ms
+        self.window_size_samples = window_size_samples
         self.sampling_rate = sampling_rate
         self.gesture_labels = []
         
         # Calculate samples per window
-        self.samples_per_window = int((window_size_ms / 1000) * sampling_rate)  # 20 samples
-        self.stride = self.samples_per_window // 2  # 50% overlap = 10 samples stride
-        
+        self.samples_per_window = window_size_samples 
+        self.stride = self.samples_per_window // 2  # 50% overlap
     @staticmethod
     def extract_features(time_series_data):
         """
@@ -111,7 +110,7 @@ class GestureModel:
             'model': self.model,
             'scaler': self.scaler,
             'gesture_labels': self.gesture_labels,
-            'window_size_ms': self.window_size_ms,
+            'window_size_samples': self.window_size_samples,  # Changed from window_size_ms
             'sampling_rate': self.sampling_rate,
             'samples_per_window': self.samples_per_window,
             'stride': self.stride
@@ -131,7 +130,7 @@ class GestureModel:
         self.model = model_data['model']
         self.scaler = model_data['scaler']
         self.gesture_labels = model_data['gesture_labels']
-        self.window_size_ms = model_data['window_size_ms']
+        self.window_size_samples = model_data['window_size_samples']  # Changed from window_size_ms
         self.sampling_rate = model_data['sampling_rate']
         self.samples_per_window = model_data['samples_per_window']
         self.stride = model_data['stride']

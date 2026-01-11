@@ -9,8 +9,13 @@ import os
 import threading
 
 # Constants
-STREAM_BUFFER_SIZE = 1000  # ~5 seconds at 200Hz
-CALIBRATION_BUFFER_SIZE = 600  # 3 seconds at 200Hz
+SAMPLINGHZ= 50
+# Calculate window sizes
+rest_window_samples = 20  #note if you are gonna change this change it also in classify function
+gesture_window_samples = 200
+
+STREAM_BUFFER_SIZE = 250  # ~5 seconds at SAMPLINGHZ
+CALIBRATION_BUFFER_SIZE = 150  # ~3 seconds at SAMPLINGHZ
 
 CALIBRATION_DURATION = 3  
 CLASSIFICATION_DURATION = 3 
@@ -66,12 +71,10 @@ def get_calibration_buffer_from_shared_mem(calib_buffer, calib_index):
         return None
     return calib_buffer[:num_samples].copy()
 
-def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION):
+def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=CLASSIFICATION_DURATION,sampling_rate=SAMPLINGHZ):
     """Read the last N seconds from the streaming buffer"""
     # Calculate how many samples we need
-    samples_per_second = 100  # Approximate (depends on actual rate)
-    num_samples = int(window_seconds * samples_per_second)
-    
+    num_samples = int(window_seconds * sampling_rate)
     # Get current position
     current_idx = stream_index.value
     
@@ -143,23 +146,27 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
 """Calibrate funcitoan will be dealt with later"""
 
-def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM_BUFFER_SIZE):
+def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM_BUFFER_SIZE,samplingrate):
     #Process 2: Runs classification separately"""
     import time
     import numpy as np
     from multiprocessing import shared_memory
+    
+    # Calculate window sizes
+    REST_WINDOW_SIZE = 20  
+    GESTURE_WINDOW_SIZE = 200
 
     # Attach to shared memory
     shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
     result_queue.put("CLASSIFY: Shared memory attached") 
     # Load both models
-    rest_model = RestDetector(window_size=20) 
+    rest_model = RestDetector(window_size=REST_WINDOW_SIZE) 
     if not rest_model.load_model('rest_model.pkl'):
         result_queue.put("ERROR: Could not load rest_model.pkl")
         return
     
-    gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
+    gesture_model = GestureModel(window_size_samples=GESTURE_WINDOW_SIZE, sampling_rate=samplingrate)
     if not gesture_model.load_model('gesture_model.pkl'):
         result_queue.put("ERROR: Could not load gesture_model.pkl")
         return
@@ -167,10 +174,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
     result_queue.put("✓ Classification process ready!")
     
     last_position = 0
-    # Calculate window sizes
-    rest_window_samples = 20   # 100ms * 200Hz = 20 samples  
-    # GestureModel uses 100ms windows (20 samples at 200Hz)
-    gesture_window_samples = gesture_model.samples_per_window  # Should be 20
+    
     while True:
         if is_running_flag.value == 0:
             time.sleep(0.01)
@@ -182,46 +186,43 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM
             time.sleep(0.001)
             continue
         
-        # Check if we have enough data for 20ms window (4 samples)
-        if current_position < rest_window_samples:
+        if current_position < REST_WINDOW_SIZE:
             continue
         
-        # Get last 20ms of data (4 samples)
+      
         end_idx = current_position % STREAM_BUFFER_SIZE
-        start_idx = (current_position - rest_window_samples) % STREAM_BUFFER_SIZE
+        start_idx = (current_position - REST_WINDOW_SIZE) % STREAM_BUFFER_SIZE
 
         if start_idx < end_idx:
-            window_20ms = stream_buffer[start_idx:end_idx].copy()
+            rest_data = stream_buffer[start_idx:end_idx].copy()
         else:
             # Wrap around
             part1 = stream_buffer[start_idx:]
             part2 = stream_buffer[:end_idx]
-            window_20ms = np.concatenate([part1, part2])
+            rest_data = np.concatenate([part1, part2])
         
-        is_rest = rest_model.predict(window_20ms)
+        is_rest = rest_model.predict(rest_data)
         result_queue.put(f"DEBUG: Rest={is_rest}, position={current_position}") 
         if is_rest:
             last_position = current_position
             continue  # Rest position, skip classification
         
-        # Not rest - check if we have enough data for 100ms window (20 samples)
-        if current_position < gesture_model.samples_per_window:
+        if current_position < GESTURE_WINDOW_SIZE:
             continue
         
-        # Get last 100ms of data (20 samples)
         end_idx_100 = current_position % STREAM_BUFFER_SIZE
-        start_idx_100 = (current_position - gesture_model.samples_per_window) % STREAM_BUFFER_SIZE
+        start_idx_100 = (current_position - GESTURE_WINDOW_SIZE) % STREAM_BUFFER_SIZE
         
         if start_idx_100 < end_idx_100:
-            window_100ms = stream_buffer[start_idx_100:end_idx_100].copy()
+            gesture_data = stream_buffer[start_idx_100:end_idx_100].copy()
         else:
             # Wrap around
             part1 = stream_buffer[start_idx_100:]
             part2 = stream_buffer[:end_idx_100]
-            window_100ms = np.concatenate([part1, part2])
+            gesture_data = np.concatenate([part1, part2])
         
         # Extract features and classify
-        features_100ms = gesture_model.extract_features(window_100ms)
+        features_100ms = gesture_model.extract_features(gesture_data)
         result = gesture_model.classify(features_100ms)
         
         # Send result to main process
@@ -236,7 +237,7 @@ def Train():
     import os
     
     print("=== Training Models ===")
-    rest_model = RestDetector(window_size=20)
+    rest_model = RestDetector(window_size=rest_window_samples)
     rest_model.train() #burada datalar rest_model.py tarafından çağrıldığı için gesture_model kadar kod yok.
     rest_model.save_model('rest_model.pkl')
     print("✓ RestModel saved as rest_model.pkl (for real-time use)")
@@ -266,7 +267,7 @@ def Train():
     for gesture_name, samples in gesture_data.items():
         print(f"  - {gesture_name}: {len(samples)} samples")
     
-    gesture_model = GestureModel(window_size_ms=100, sampling_rate=200)
+    gesture_model = GestureModel(window_size_samples=gesture_window_samples, sampling_rate=SAMPLINGHZ)
     gesture_model.train(gesture_data)
     gesture_model.save_model('gesture_model.pkl')
     print("✓ GestureModel saved as gesture_model.pkl")
@@ -350,7 +351,7 @@ if __name__ == "__main__":
     # Start classification process
     classify_process = Process(
         target=Classify,
-        args=(shm_stream.name, stream_index, is_running_flag,result_queue,STREAM_BUFFER_SIZE) 
+        args=(shm_stream.name, stream_index, is_running_flag,result_queue,STREAM_BUFFER_SIZE,SAMPLINGHZ) 
     )
     classify_process.daemon = True
     classify_process.start()

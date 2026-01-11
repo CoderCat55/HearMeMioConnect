@@ -28,14 +28,17 @@ model1(the rest model) in rest_model1.py It can accurately recognize if a gestur
 
 ----------------- already done left to gain basic understanding of the system --------------------------
 
-TODO:
-gesture_model shoud not be an svm instead I need this model to be our new gesture model: Random Forest: {'max_depth': None, 'min_samples_split': 2, 'n_estimators': 200}
+# ToDo
+write down a list of code which has hz or samplerate declaration
+we need to make sample rate controlled by only one variable which will be named samplinghz and will be defined at the top of the main.py -already did-
+lets look at codes where should be changed in order to eliminate mismatches ?
 
 
 DO NOT FORGET THE RULES
 Create a list how this would be implemented to current system , which parts should be changed which parts should be added and where. 
 
-RULES: Please really read all the code. Do not make assumptions while answering. While giving ansswers include the chain of thought, why did you make that assumption, which part of thee code leads you to that? If you are not sure about how something works just tell me.
+# RULES: 
+Please really read all the code. Do not make assumptions while answering. While giving ansswers include the chain of thought, why did you make that assumption, which part of thee code leads you to that? If you are not sure about how something works just tell me.
 
 Your aim is to discuss the structure with me. I need you to be objective. You should use strategies like listing pros and cons of a situation and judge it according to my aim.
 

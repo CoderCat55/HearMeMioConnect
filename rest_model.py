@@ -6,7 +6,7 @@ import os
 
 class RestDetector:
     #  binary SVM for understanding if data is rest or not
-    def __init__(self, window_size=20):  # samples, not ms
+    def __init__(self, window_size):  # samples, not ms
         self.model = svm.SVC(kernel='rbf', C=1.0, gamma='scale')
         self.scaler = StandardScaler()
         self.window_size = window_size
