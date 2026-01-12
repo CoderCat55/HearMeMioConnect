@@ -57,7 +57,7 @@ class RestDetector:
         
         print(f"\nLoading non-rest data from rows_deleted/p{{1-6}}...")
         not_rest_samples = []
-        for participant_id in range(1, 7):
+        for participant_id in range(1, 5):
             folder = f'rows_deleted/p{participant_id}'
             if os.path.exists(folder):
                 files = glob.glob(f'{folder}/*.npy') 
