@@ -14,8 +14,8 @@ SAMPLINGHZ= 50
 rest_window_samples = 20  #note if you are gonna change this change it also in classify function
 gesture_window_samples = 200
 
-STREAM_BUFFER_SIZE = 250  # ~5 seconds at SAMPLINGHZ
-CALIBRATION_BUFFER_SIZE = 150  # ~3 seconds at SAMPLINGHZ
+STREAM_BUFFER_SIZE = 1000  # ~5 seconds at SAMPLINGHZ
+CALIBRATION_BUFFER_SIZE = 250  # ~3 seconds at SAMPLINGHZ
 
 CALIBRATION_DURATION = 3  
 CLASSIFICATION_DURATION = 3 
@@ -146,91 +146,125 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
 """Calibrate funcitoan will be dealt with later"""
 
-def Classify(stream_mem_name, stream_index, is_running_flag, result_queue,STREAM_BUFFER_SIZE,samplingrate):
-    #Process 2: Runs classification separately"""
+
+def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREAM_BUFFER_SIZE, samplingrate):
+    """Process 2: Runs classification using Rest-to-Rest strategy"""
     import time
     import numpy as np
     from multiprocessing import shared_memory
     
     # Calculate window sizes
     REST_WINDOW_SIZE = 20  
-    GESTURE_WINDOW_SIZE = 200
-
+    
     # Attach to shared memory
     shm_stream = shared_memory.SharedMemory(name=stream_mem_name)
     stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
-    result_queue.put("CLASSIFY: Shared memory attached") 
+    result_queue.put("CLASSIFY: Shared memory attached")
+    
     # Load both models
-    rest_model = RestDetector(window_size=REST_WINDOW_SIZE) 
+    rest_model = RestDetector(window_size=REST_WINDOW_SIZE)
     if not rest_model.load_model('rest_model.pkl'):
         result_queue.put("ERROR: Could not load rest_model.pkl")
         return
     
-    gesture_model = GestureModel(window_size_samples=GESTURE_WINDOW_SIZE, sampling_rate=samplingrate)
+    # Note: We still load GestureModel, but we will feed it variable length data now
+    gesture_model = GestureModel(window_size_samples=200, sampling_rate=samplingrate)
     if not gesture_model.load_model('gesture_model.pkl'):
         result_queue.put("ERROR: Could not load gesture_model.pkl")
         return
     
-    result_queue.put("✓ Classification process ready!")
+    result_queue.put("✓ Classification process ready! (Waiting for Non-Rest to Rest sequence)")
     
-    last_position = 0
+    last_processed_idx = 0
+    gesture_start_idx = None  # State variable: None = Waiting, Int = Recording
     
     while True:
         if is_running_flag.value == 0:
             time.sleep(0.01)
             continue
         
-        # Wait for new data
-        current_position = stream_index.value
-        if current_position <= last_position:
-            time.sleep(0.001)
-            continue
+        # 1. Get current absolute position
+        current_idx = stream_index.value
         
-        if current_position < REST_WINDOW_SIZE:
-            continue
-        
-      
-        end_idx = current_position % STREAM_BUFFER_SIZE
-        start_idx = (current_position - REST_WINDOW_SIZE) % STREAM_BUFFER_SIZE
+        # 2. Check if we have enough new data for a rest check
+        if current_idx - last_processed_idx < 1: # check often
+             time.sleep(0.002)
+             continue
 
-        if start_idx < end_idx:
-            rest_data = stream_buffer[start_idx:end_idx].copy()
-        else:
-            # Wrap around
-            part1 = stream_buffer[start_idx:]
-            part2 = stream_buffer[:end_idx]
-            rest_data = np.concatenate([part1, part2])
-        
-        is_rest = rest_model.predict(rest_data)
-        result_queue.put(f"DEBUG: Rest={is_rest}, position={current_position}") 
-        if is_rest:
-            last_position = current_position
-            continue  # Rest position, skip classification
-        
-        if current_position < GESTURE_WINDOW_SIZE:
+        # Ensure we have at least one window of data to check rest
+        if current_idx < REST_WINDOW_SIZE:
             continue
+
+        # 3. Extract the latest small window to check if hand is resting
+        # Handle wrap around for the Rest Window
+        r_end = current_idx % STREAM_BUFFER_SIZE
+        r_start = (current_idx - REST_WINDOW_SIZE) % STREAM_BUFFER_SIZE
         
-        end_idx_100 = current_position % STREAM_BUFFER_SIZE
-        start_idx_100 = (current_position - GESTURE_WINDOW_SIZE) % STREAM_BUFFER_SIZE
-        
-        if start_idx_100 < end_idx_100:
-            gesture_data = stream_buffer[start_idx_100:end_idx_100].copy()
+        if r_start < r_end:
+            rest_check_data = stream_buffer[r_start:r_end]
         else:
-            # Wrap around
-            part1 = stream_buffer[start_idx_100:]
-            part2 = stream_buffer[:end_idx_100]
-            gesture_data = np.concatenate([part1, part2])
+            rest_check_data = np.concatenate([stream_buffer[r_start:], stream_buffer[:r_end]])
+
+        # 4. Predict State
+        is_rest = rest_model.predict(rest_check_data)
         
-        # Extract features and classify
-        features_100ms = gesture_model.extract_features(gesture_data)
-        result = gesture_model.classify(features_100ms)
+        # --- STATE MACHINE LOGIC ---
         
-        # Send result to main process
-        result_queue.put(result)
-        print(f"🎯 Detected: {result}")
+        # State A: We are currently WAITING for a gesture to start
+        if gesture_start_idx is None:
+            if not is_rest:
+                # TRANSITION: Rest -> Active
+                # We assume the gesture started a bit before the detector triggered, 
+                # so we set start index back by the window size.
+                gesture_start_idx = current_idx - REST_WINDOW_SIZE
+                result_queue.put(f"⚡ Movement started at idx {gesture_start_idx}...")
         
-        last_position = current_position
-""""""
+        # State B: We are currently RECORDING a gesture
+        else:
+            if is_rest:
+                # TRANSITION: Active -> Rest (Gesture Finished)
+                gesture_end_idx = current_idx
+                duration_samples = gesture_end_idx - gesture_start_idx
+                
+                # Filter: Ignore very short blips (e.g., < 10 samples)
+                if duration_samples > 10:
+                    result_queue.put(f"🛑 Movement ended. Capturing {duration_samples} samples...")
+                    
+                    # Extract the FULL gesture from shared memory
+                    # We must handle wrap around for the potentially large chunk
+                    g_start_wrapped = gesture_start_idx % STREAM_BUFFER_SIZE
+                    g_end_wrapped = gesture_end_idx % STREAM_BUFFER_SIZE
+                    
+                    if g_start_wrapped < g_end_wrapped:
+                        full_gesture_data = stream_buffer[g_start_wrapped:g_end_wrapped].copy()
+                    else:
+                        full_gesture_data = np.concatenate([
+                            stream_buffer[g_start_wrapped:], 
+                            stream_buffer[:g_end_wrapped]
+                        ])
+                    
+                    # CLASSIFY
+                    # Note: full_gesture_data size is variable now. 
+                    # extract_features handles this, but model accuracy depends on training data.
+                    features = gesture_model.extract_features(full_gesture_data)
+                    result = gesture_model.classify(features)
+                    
+                    result_queue.put(f"🎯 RESULT: {result}")
+                else:
+                    result_queue.put("⚠️ Ignored short blip")
+
+                # Reset state to waiting
+                gesture_start_idx = None
+            
+            # If still not rest, we just loop and wait for more data to accumulate.
+            # Safety check: If gesture gets too long (buffer overflow risk), force stop
+            elif (current_idx - gesture_start_idx) >= STREAM_BUFFER_SIZE:
+                result_queue.put("⚠️ Buffer Overflow: Gesture too long, resetting.")
+                gesture_start_idx = None
+
+        last_processed_idx = current_idx
+
+
 def Train():
     #Train both models - RestModel on ALL participants, GestureModel on segmented data"""
     import glob
