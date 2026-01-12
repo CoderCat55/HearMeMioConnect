@@ -6,4 +6,6 @@ example numpy array path : rows_deleted\p1\bek_1765449146.npy
 - rest class: rows_deleted/p{1-6}/all npy arrays that start with "rest"
 - non-rest class: rows_deleted/p{1-6}/all npy arrays that dont start with "rest"
 
+belki classify functionunu process olarak değil thread olarak yapmak daha iyi olaiblirdiyada belki bir config dosyası ekleyip parametreleri oradan çağırabiliriz
 
+not training ile classificationw windowları aynı boyutta olmalı 

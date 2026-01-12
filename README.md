@@ -15,23 +15,13 @@ Also we need to get data not using connection id we need to get data with device
 
 classification and commanding should run simulteneusly so I can start-stop classsification. I would prefer multiprocessing.
 
-classification details :
-while is_running True
-            check if the gesture is rest  with restmodel(model 1) window size 20 
-            if gesture != rest
-                do feature engineering  
-                run classifymodel(model 2) window size 100 ms 
-
 we will have 2 models which they will need seperate classes restmodel and classifymodel class:
 model1(the rest model) in rest_model1.py It can accurately recognize if a gesture is rest or not.
-
-
 ----------------- already done left to gain basic understanding of the system --------------------------
 
 # ToDo
-write down a list of code which has hz or samplerate declaration
-we need to make sample rate controlled by only one variable which will be named samplinghz and will be defined at the top of the main.py -already did-
-lets look at codes where should be changed in order to eliminate mismatches ?
+classification logic:
+when non-rest is detected save the next 1.5 seconds of data to a classification buffer then classify it and show the result.
 
 
 DO NOT FORGET THE RULES
