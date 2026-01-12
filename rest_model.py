@@ -1,8 +1,11 @@
+# rest_model.py
 from sklearn import svm
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pickle
 import os
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+import pandas as pd # Optional, for nicer saving, but standard file I/O works too
 
 class RestDetector:
     #  binary SVM for understanding if data is rest or not
@@ -111,9 +114,32 @@ class RestDetector:
         
         # Train SVM
         self.model.fit(X_scaled, y)
+        # ... [After self.model.fit(X_scaled, y)] ...
         
-        print("✓ RestDetector training complete!")
+        # --- NEW CODE START ---
+        # Predict on the training set (or ideally a validation set) to get metrics
+        y_pred = self.model.predict(X_scaled)
+        
+        acc = accuracy_score(y, y_pred)
+        cm = confusion_matrix(y, y_pred)
+        report = classification_report(y, y_pred, target_names=['Rest', 'Non-Rest'])
+        
+        print(f"✓ RestDetector training complete! Accuracy: {acc*100:.2f}%")
+        
+        # Save detailed results to file
+        with open('rest_model_results.txt', 'w') as f:
+            f.write(f"Rest Model Accuracy: {acc*100:.2f}%\n\n")
+            f.write("Confusion Matrix:\n")
+            f.write(str(cm))
+            f.write("\n\nClassification Report:\n")
+            f.write(report)
+            
+        print("✓ Detailed Rest results saved to 'rest_model_results.txt'")
+        # --- NEW CODE END ---
+        
         return True
+    
+
     def predict(self, window_data):
         """
         Predict if window is rest or not-rest

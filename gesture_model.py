@@ -6,7 +6,9 @@ import numpy as np
 import pickle
 import os
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+import matplotlib.pyplot as plt # If you want to save plot, otherwise text is fine
+import seaborn as sns # Optional for heatmap
 
 class GestureModel:
     def __init__(self, window_size_samples, sampling_rate):
@@ -88,7 +90,34 @@ class GestureModel:
         y_pred = self.model.predict(X_test_scaled)
         accuracy = accuracy_score(y_test, y_pred)
         
-        print(f"Model Accuracy: %{accuracy * 100:.2f}")
+        # --- NEW CODE START ---
+        cm = confusion_matrix(y_test, y_pred, labels=self.gesture_labels)
+        report = classification_report(y_test, y_pred, target_names=self.gesture_labels)
+        
+        print(f"Model Accuracy: {accuracy * 100:.2f}%")
+        
+        # Save text report
+        with open('gesture_model_results.txt', 'w') as f:
+            f.write(f"Gesture Model Accuracy: {accuracy * 100:.2f}%\n\n")
+            f.write("Confusion Matrix (Rows=True, Cols=Predicted):\n")
+            f.write(str(cm))
+            f.write("\n\nClassification Report:\n")
+            f.write(report)
+            
+        # Optional: Save Confusion Matrix as Image
+        try:
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(cm, annot=True, fmt='d', xticklabels=self.gesture_labels, yticklabels=self.gesture_labels)
+            plt.title('Gesture Confusion Matrix')
+            plt.ylabel('True Label')
+            plt.xlabel('Predicted Label')
+            plt.savefig('gesture_confusion_matrix.png')
+            plt.close()
+        except:
+            print("Could not save image (missing seaborn/matplotlib), but text saved.")
+            
+        print("✓ Detailed Gesture results saved to 'gesture_model_results.txt'")
+        # --- NEW CODE END ---
         return accuracy
 
     
