@@ -8,6 +8,7 @@ from gesture_model import GestureModel
 import os
 import threading
 
+
 # Constants
 SAMPLINGHZ= 50
 # Calculate window sizes
@@ -146,12 +147,12 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
 """Calibrate funcitoan will be dealt with later"""
 
-
 def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREAM_BUFFER_SIZE, samplingrate):
     """Process 2: Runs classification using Rest-to-Rest strategy"""
     import time
     import numpy as np
     from multiprocessing import shared_memory
+    import requests
     
     # Calculate window sizes
     REST_WINDOW_SIZE = 20  
@@ -250,6 +251,14 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
                     result = gesture_model.classify(features)
                     
                     result_queue.put(f"🎯 RESULT: {result}")
+                    # Send result to webserver
+                    try:
+                        requests.get(
+                            f'http://localhost:5002/result?value={result}', 
+                            timeout=0.5
+                        )
+                    except Exception as e:
+                        pass  # Don't crash if webserver is unreachable
                 else:
                     result_queue.put("⚠️ Ignored short blip")
 
@@ -263,7 +272,6 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
                 gesture_start_idx = None
 
         last_processed_idx = current_idx
-
 
 def Train():
     #Train both models - RestModel on ALL participants, GestureModel on segmented data"""
@@ -309,31 +317,44 @@ def Train():
     print("\n=== Training Complete! ===")
     print("Models ready for real-time classification")
     return True
-
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
-           recording_flag, recording_gesture,is_running_flag): 
+           recording_flag, recording_gesture, is_running_flag, system): 
     value = input("Enter your command majesty: ")
     match value:
+        case "connect":
+            print("Starting data acquisition...")
+            system.start_data_acquisition()
+        case "disconnect":
+            print("Stopping data acquisition...")
+            system.stop_data_acquisition()
         case "tr":  #train
             print("now will run train function")
             Train()
         case "cb":  #calibrate
-            print("now will run calibrate function")
-            gesture_name = input("Which gesture would you like to calibrate? ")
-            Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-                     recording_gesture )
+            if not system.is_data_acquisition_running():
+                print("ERROR: Data acquisition not running. Use 'connect' first.")
+            else:
+                print("now will run calibrate function")
+                gesture_name = input("Which gesture would you like to calibrate? ")
+                Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
+                         recording_gesture)
         case "startcf":
-            print("starting classification")
-            is_running_flag.value = 1
+            if not system.is_data_acquisition_running():
+                print("ERROR: Data acquisition not running. Use 'connect' first.")
+            else:
+                print("starting classification")
+                is_running_flag.value = 1
         case "stopcf":
             print("stopping classification")
             is_running_flag.value = 0
         case "debug":
+            print(f"Data acquisition running: {system.is_data_acquisition_running()}")
             print(f"Stream index: {stream_index.value}")
             print(f"Classification running: {is_running_flag.value}")
-            print(f"Recent data sample: {stream_buffer[stream_index.value % STREAM_BUFFER_SIZE][:8]}")
+            if stream_index.value > 0:
+                print(f"Recent data sample: {stream_buffer[stream_index.value % STREAM_BUFFER_SIZE][:8]}")
         case _:
-            print("Invalid command! Use: tr, cb, startcf, stopcf")
+            print("Invalid command! Use: connect, disconnect, tr, cb, startcf, stopcf, debug")
 
 def monitor_classification_results(result_queue):
     """Read from queue and print to terminal"""
@@ -344,74 +365,289 @@ def monitor_classification_results(result_queue):
         except:
             continue  # Queue empty, keep checking
 
+class GestureSystem:
+    """Centralized system controller for webserver integration"""
+    
+    def __init__(self):
+        print("Initializing GestureSystem...")
+        
+        # Shared memory buffers
+        self.shm_stream = None
+        self.shm_calib = None
+        self.stream_buffer = None
+        self.calib_buffer = None
+        
+        # Shared control variables
+        self.stream_index = None
+        self.calib_index = None
+        self.recording_flag = None
+        self.recording_gesture = None
+        self.is_running_flag = None
+        self.result_queue = None
+        
+        # Process/thread handles
+        self.data_process = None
+        self.classify_process = None
+        self.monitor_thread = None
+        
+        # Models (for status checking)
+        self.rest_model = None
+        self.gesture_model = None
+        
+        self._initialize_shared_memory()
+        self._load_models()
+    
+    def _initialize_shared_memory(self):
+        """Create all shared memory structures"""
+        # Stream buffer
+        self.shm_stream = shared_memory.SharedMemory(
+            create=True, 
+            size=STREAM_BUFFER_SIZE * 34 * 4
+        )
+        self.stream_buffer = np.ndarray(
+            (STREAM_BUFFER_SIZE, 34), 
+            dtype=np.float32, 
+            buffer=self.shm_stream.buf
+        )
+        self.stream_buffer.fill(0)
+        
+        # Calibration buffer
+        self.shm_calib = shared_memory.SharedMemory(
+            create=True, 
+            size=CALIBRATION_BUFFER_SIZE * 34 * 4
+        )
+        self.calib_buffer = np.ndarray(
+            (CALIBRATION_BUFFER_SIZE, 34), 
+            dtype=np.float32, 
+            buffer=self.shm_calib.buf
+        )
+        self.calib_buffer.fill(0)
+        
+        # Shared indices and flags
+        self.stream_index = mp.Value('i', 0)
+        self.calib_index = mp.Value('i', 0)
+        self.recording_flag = mp.Value('i', 0)
+        self.recording_gesture = mp.Array('c', 50)
+        self.is_running_flag = mp.Value('i', 0)
+        self.result_queue = mp.Queue()
+        
+        print("✓ Shared memory initialized")
+    
+    def _load_models(self):
+        """Load trained models for status checking"""
+        try:
+            self.rest_model = RestDetector(window_size=rest_window_samples)
+            if os.path.exists('rest_model.pkl'):
+                self.rest_model.load_model('rest_model.pkl')
+            
+            self.gesture_model = GestureModel(
+                window_size_samples=gesture_window_samples, 
+                sampling_rate=SAMPLINGHZ
+            )
+            if os.path.exists('gesture_model.pkl'):
+                self.gesture_model.load_model('gesture_model.pkl')
+        except Exception as e:
+            print(f"Note: Models not loaded yet ({e})")
+    
+    def start_data_acquisition(self):
+        """Start the data acquisition process"""
+        if self.data_process is not None and self.data_process.is_alive():
+            print("Data acquisition already running")
+            return True
+        
+        self.data_process = Process(
+            target=data_acquisition_process,
+            args=(
+                self.shm_stream.name, 
+                self.shm_calib.name, 
+                self.stream_index, 
+                self.calib_index,
+                self.recording_flag, 
+                self.recording_gesture
+            )
+        )
+        self.data_process.daemon = True
+        self.data_process.start()
+        
+        # Wait for initialization
+        time.sleep(5)
+        
+        if self.data_process.is_alive():
+            print("✓ Data acquisition started")
+            return True
+        else:
+            print("✗ Data acquisition failed to start")
+            return False
+    
+    def stop_data_acquisition(self):
+        """Stop the data acquisition process"""
+        if self.data_process is not None and self.data_process.is_alive():
+            self.data_process.terminate()
+            self.data_process.join(timeout=2)
+            print("✓ Data acquisition stopped")
+    
+    def is_data_acquisition_running(self):
+        """Check if data acquisition is running"""
+        return self.data_process is not None and self.data_process.is_alive()
+    
+    def start_classification_process(self):
+        """Start the classification process (called once at startup)"""
+        if self.classify_process is not None and self.classify_process.is_alive():
+            print("Classification process already exists")
+            return True
+        
+        self.classify_process = Process(
+            target=Classify,
+            args=(
+                self.shm_stream.name, 
+                self.stream_index, 
+                self.is_running_flag,
+                self.result_queue,
+                STREAM_BUFFER_SIZE,
+                SAMPLINGHZ
+            )
+        )
+        self.classify_process.daemon = True
+        self.classify_process.start()
+        time.sleep(1)
+        
+        print("✓ Classification process started (paused)")
+        return True
+    
+    def start_classification(self):
+        """Enable classification (set flag to 1)"""
+        self.is_running_flag.value = 1
+        print("✓ Classification enabled")
+    
+    def stop_classification(self):
+        """Disable classification (set flag to 0)"""
+        self.is_running_flag.value = 0
+        print("✓ Classification disabled")
+    
+    def is_classification_running(self):
+        """Check if classification is active"""
+        return bool(self.is_running_flag.value)
+    
+    def start_monitor_thread(self):
+        """Start thread to monitor classification results"""
+        self.monitor_thread = threading.Thread(
+            target=monitor_classification_results,
+            args=(self.result_queue,),
+            daemon=True
+        )
+        self.monitor_thread.start()
+        print("✓ Monitor thread started")
+    
+    def calibrate(self, gesture_name):
+        """Calibrate a gesture"""
+        if not self.is_data_acquisition_running():
+            print("ERROR: Data acquisition not running")
+            return False
+        
+        try:
+            Calibrate(
+                gesture_name, 
+                self.calib_buffer, 
+                self.calib_index,
+                self.recording_flag, 
+                self.recording_gesture
+            )
+            return True
+        except Exception as e:
+            print(f"Calibration failed: {e}")
+            return False
+    
+    def train_models(self):
+        """Train both models"""
+        try:
+            success = Train()
+            if success:
+                self._load_models()  # Reload models after training
+            return success
+        except Exception as e:
+            print(f"Training failed: {e}")
+            return False
+    
+    def cleanup(self):
+        """Clean up all resources"""
+        print("Cleaning up...")
+        
+        # Stop classification
+        self.is_running_flag.value = 0
+        
+        # Terminate processes
+        if self.data_process is not None:
+            self.data_process.terminate()
+            self.data_process.join(timeout=2)
+        
+        if self.classify_process is not None:
+            self.classify_process.terminate()
+            self.classify_process.join(timeout=2)
+        
+        # Clean up shared memory
+        try:
+            self.shm_stream.close()
+            self.shm_stream.unlink()
+        except:
+            pass
+        
+        try:
+            self.shm_calib.close()
+            self.shm_calib.unlink()
+        except:
+            pass
+        
+        print("✓ Cleanup complete")
+
 if __name__ == "__main__":
+    print("=" * 50)
     print("=== Gesture Recognition System ===")
-    print("Initializing...")
+    print("=" * 50)
     
-    # Create shared memory buffers
-    shm_stream = shared_memory.SharedMemory(create=True, size=STREAM_BUFFER_SIZE*34*4)
-    stream_buffer = np.ndarray((STREAM_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_stream.buf)
-    stream_buffer.fill(0)  # Initialize to zero
+    # Create system instance
+    system = GestureSystem()
+    # Start classification process (it will wait for start command)
+    print("Starting classification process...")
+    system.start_classification_process()
     
-    shm_calib = shared_memory.SharedMemory(create=True, size=CALIBRATION_BUFFER_SIZE*34*4)
-    calib_buffer = np.ndarray((CALIBRATION_BUFFER_SIZE, 34), dtype=np.float32, buffer=shm_calib.buf)
-    calib_buffer.fill(0)
+    # Start monitor thread for terminal output
+    system.start_monitor_thread()
     
-    # Create shared indices and flags
-    stream_index = mp.Value('i', 0)
-    calib_index = mp.Value('i', 0)
-    recording_flag = mp.Value('i', 0)
-    recording_gesture = mp.Array('c', 50)
-    is_running_flag = mp.Value('i', 0)
-    result_queue = mp.Queue()
-
-    # Start data acquisition process
-    data_process = Process(
-        target=data_acquisition_process,
-        args=(shm_stream.name, shm_calib.name, stream_index, calib_index, 
-              recording_flag, recording_gesture)
+    # ====== Start Webserver ======
+    print("\nStarting webserver...")
+    from webserver import app, inject_system
+    inject_system(system)
+    
+    webserver_thread = threading.Thread(
+        target=lambda: app.run(host='0.0.0.0', port=5002, debug=False, use_reloader=False),
+        daemon=True
     )
-    data_process.daemon = True  # Dies when main process dies
-    data_process.start()
-    time.sleep(2)  # wait for dataprocess to start
-    # Give it time to connect
-    print("Connecting to Myo armbands...")
-    time.sleep(5)
-
-    if not data_process.is_alive():
-        print("ERROR: Data acquisition process failed to start!")
-        print("Check if Myo dongle is connected and MyoConnect is closed")
-    
-    # Start classification process
-    classify_process = Process(
-        target=Classify,
-        args=(shm_stream.name, stream_index, is_running_flag,result_queue,STREAM_BUFFER_SIZE,SAMPLINGHZ) 
-    )
-    classify_process.daemon = True
-    classify_process.start()
-    monitor_thread = threading.Thread(
-    target=monitor_classification_results,
-    args=(result_queue,),daemon=True)
-    monitor_thread.start()
+    webserver_thread.start()
+    print(f"✓ Webserver running on http://0.0.0.0:5002")
+    print("=" * 50)
     
     print("\nSystem ready! Available commands:")
-    print("  tr = train models")
-    print("  cb = calibrate gesture")
-    print("  startcf = start classification")
-    print("  stopcf = stop classification")
+    print("  tr       = train models")
+    print("  cb       = calibrate gesture")
+    print("  startcf  = start classification")
+    print("  stopcf   = stop classification")
+    print("  debug    = show debug info")
     print()
+    
     # Command loop
     try:
         while True:
-            Command(stream_buffer, stream_index, calib_buffer, calib_index,
-                   recording_flag, recording_gesture, is_running_flag)
+            Command(
+                system.stream_buffer, 
+                system.stream_index, 
+                system.calib_buffer, 
+                system.calib_index,
+                system.recording_flag, 
+                system.recording_gesture,
+                system.is_running_flag,
+                system
+            )
     except KeyboardInterrupt:
-        print("\nShutting down...")
-        is_running_flag.value = 0
-        data_process.terminate()
-        data_process.join()
-        shm_stream.close()
-        shm_stream.unlink()
-        shm_calib.close()
-        shm_calib.unlink()
+        print("\n\nShutting down...")
+        system.cleanup()
         print("Goodbye!")
