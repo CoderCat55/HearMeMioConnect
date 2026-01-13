@@ -245,7 +245,7 @@ def get_result():
     """Get latest classification result (polled by mobile app) - AUTO-RESETS after read"""
     global _latest_result
     
-    if _latest_result['gesture'] is None:
+    if _latest_result['cr'] is None:
         return jsonify({
             "status": "no_result",
             "message": "No classification result available yet",
@@ -365,7 +365,7 @@ def status():
             "rest_model_trained": rest_model_trained,
             "gesture_model_trained": gesture_model_trained,
             "available_gestures": gesture_labels,
-            "latest_result": _latest_result['gesture'],
+            "latest_result": _latest_result['cr'],
             "result_history": _result_history[-10:],  # Last 10 results
             "total_classifications": len(_result_history)
         }
