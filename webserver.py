@@ -41,7 +41,7 @@ sensor_data = {
 }
 # Global variable to store latest classification result
 _latest_result = {
-    'gesture': None,
+    'cr': None,
     'timestamp': None
 }
 
@@ -60,7 +60,6 @@ def index():
         "message": "Raspberry Pi Gesture Recognition Server",
         "data_acquisition_running": _system.is_data_acquisition_running() if _system else False
     })
-
 
 @app.route('/data')
 def data():
@@ -122,7 +121,6 @@ def data():
     
     return jsonify(sensor_data)
 
-
 @app.route('/connect')
 def connect():
     """Start data acquisition process """
@@ -150,7 +148,6 @@ def connect():
             "status": "error",
             "message": "Failed to start data acquisition"
         }), 500
-
 
 @app.route('/disconnect')
 def disconnect():
@@ -190,7 +187,6 @@ def startcf():
         "message": "Classification started"
     })
 
-
 @app.route('/stopcf')
 def stopcf():
     """Stop classification"""
@@ -207,7 +203,6 @@ def stopcf():
         "message": "Classification stopped"
     })
 
-
 @app.route('/result')
 def result():
     global _latest_result, _result_history
@@ -220,13 +215,13 @@ def result():
         
         # Store as latest result
         _latest_result = {
-            'gesture': result_value,
+            'cr': result_value,
             'timestamp': current_time
         }
         
         # Add to history
         _result_history.append({
-            'gesture': result_value,
+            'cr': result_value,
             'timestamp': current_time
         })
         
@@ -253,19 +248,20 @@ def get_result():
     if _latest_result['gesture'] is None:
         return jsonify({
             "status": "no_result",
-            "message": "No classification result available yet"
+            "message": "No classification result available yet",
+            "cr": "none"
         })
     
     # Capture result before resetting
     result_to_return = {
         "status": "success",
-        "gesture": _latest_result['gesture'],
+        "cr": _latest_result['cr'],
         "timestamp": _latest_result['timestamp']
     }
     
     # RESET after reading (one-time consumption)
     _latest_result = {
-        'gesture': None,
+        'cr': None,
         'timestamp': None
     }
     
@@ -336,7 +332,6 @@ def setcw():
             "message": "Calibration failed",
             "nextcal":"notok"
         }), 500
-
 
 @app.route('/status')
 def status():
