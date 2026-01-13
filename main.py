@@ -247,18 +247,27 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
                     # CLASSIFY
                     # Note: full_gesture_data size is variable now. 
                     # extract_features handles this, but model accuracy depends on training data.
+                    # CLASSIFY
+                    # CLASSIFY
                     features = gesture_model.extract_features(full_gesture_data)
+                    result_queue.put(f"DEBUG: features shape = {features.shape}")
+                    result_queue.put(f"DEBUG: features sample = {features[:5]}")
+
                     result = gesture_model.classify(features)
-                    
+                    result_queue.put(f"DEBUG: Raw result = '{result}'")
+                    result_queue.put(f"DEBUG: Result type = {type(result)}")
+                    result_queue.put(f"DEBUG: Result repr = {repr(result)}")
+
                     result_queue.put(f"🎯 RESULT: {result}")
+
                     # Send result to webserver
                     try:
-                        requests.get(
-                            f'http://localhost:5002/result?value={result}', 
-                            timeout=0.5
-                        )
+                        url = f'http://localhost:5002/result?value={result}'
+                        result_queue.put(f"DEBUG: Sending URL = {url}")
+                        response = requests.get(url, timeout=0.5)
+                        result_queue.put(f"DEBUG: Response = {response.json()}")
                     except Exception as e:
-                        pass  # Don't crash if webserver is unreachable
+                        result_queue.put(f"DEBUG: Request failed: {e}")
                 else:
                     result_queue.put("⚠️ Ignored short blip")
 

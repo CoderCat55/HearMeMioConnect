@@ -45,6 +45,10 @@ _latest_result = {
     'timestamp': None
 }
 
+# Result history for status endpoint
+_result_history = []  # List of dicts: [{gesture, timestamp}, ...]
+MAX_HISTORY_SIZE = 10  # Keep last 10 results
+
 # ==================== ROUTES ====================
 
 @app.route('/')
@@ -206,19 +210,31 @@ def stopcf():
 
 @app.route('/result')
 def result():
-    """Receive classification result from Classify process (called by main.py)"""
-    global _latest_result
+    global _latest_result, _result_history
     
-    # Get result from query parameter
     result_value = request.args.get('value', type=str)
     
     if result_value:
         import time
+        current_time = time.time()
+        
+        # Store as latest result
         _latest_result = {
             'gesture': result_value,
-            'timestamp': time.time()
+            'timestamp': current_time
         }
-        print(f"📥 Received classification result: {result_value}")
+        
+        # Add to history
+        _result_history.append({
+            'gesture': result_value,
+            'timestamp': current_time
+        })
+        
+        # Trim history if too large
+        if len(_result_history) > MAX_HISTORY_SIZE:
+            _result_history.pop(0)
+        
+        print(f"🔥 Received classification result: {result_value}")
         return jsonify({
             "status": "success",
             "message": f"Result '{result_value}' received"
@@ -229,10 +245,9 @@ def result():
             "message": "Missing 'value' parameter"
         }), 400
 
-
 @app.route('/get_result')
 def get_result():
-    """Get latest classification result (polled by mobile app)"""
+    """Get latest classification result (polled by mobile app) - AUTO-RESETS after read"""
     global _latest_result
     
     if _latest_result['gesture'] is None:
@@ -241,12 +256,20 @@ def get_result():
             "message": "No classification result available yet"
         })
     
-    return jsonify({
+    # Capture result before resetting
+    result_to_return = {
         "status": "success",
         "gesture": _latest_result['gesture'],
         "timestamp": _latest_result['timestamp']
-    })
-
+    }
+    
+    # RESET after reading (one-time consumption)
+    _latest_result = {
+        'gesture': None,
+        'timestamp': None
+    }
+    
+    return jsonify(result_to_return)
 
 @app.route('/train') 
 def train():
@@ -347,7 +370,9 @@ def status():
             "rest_model_trained": rest_model_trained,
             "gesture_model_trained": gesture_model_trained,
             "available_gestures": gesture_labels,
-            "latest_result": _latest_result['gesture']
+            "latest_result": _latest_result['gesture'],
+            "result_history": _result_history[-10:],  # Last 10 results
+            "total_classifications": len(_result_history)
         }
     })
 
