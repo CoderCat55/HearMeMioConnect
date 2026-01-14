@@ -5,6 +5,7 @@ import numpy as np
 import time
 from rest_model import RestDetector
 from gesture_model import GestureModel
+from personal_model import PersonalModel
 import os
 import threading
 
@@ -13,7 +14,7 @@ import threading
 SAMPLINGHZ= 50
 # Calculate window sizes
 rest_window_samples = 20  #note if you are gonna change this change it also in classify function
-gesture_window_samples = 200
+gesture_window_samples = 75
 
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at SAMPLINGHZ
 CALIBRATION_BUFFER_SIZE = 250  # ~3 seconds at SAMPLINGHZ
@@ -247,13 +248,13 @@ def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, re
         result_queue.put("ERROR: Could not load rest_model.pkl")
         return
     
-    gesture_model = GestureModel(window_size_samples=200, sampling_rate=samplingrate)
+    gesture_model = GestureModel(window_size_samples=75, sampling_rate=samplingrate)
     if not gesture_model.load_model('gesture_model.pkl'):
         result_queue.put("ERROR: Could not load gesture_model.pkl it might benot trained yet")
         return
     
     #personal gesture model that will be trained on data in 'user folder'
-    Pgesture_model = GestureModel(window_size_samples=200, sampling_rate=samplingrate)
+    Pgesture_model = PersonalModel(window_size_samples=75, sampling_rate=samplingrate)
     if not Pgesture_model.load_model('Pgesture_model.pkl'):
         result_queue.put("ERROR: Could not load Pgesture_model.pkl (personal model not trained yet)")
         Pgesture_model = None  # Mark as unavailable
@@ -388,81 +389,75 @@ def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, re
 
         last_processed_idx = current_idx
 
-def Train():
-    #Train both models - RestModel on ALL participants, GestureModel on segmented data"""
+def TrainPersonal():
+    """Sadece 'user' klasöründeki verilerle PersonalModel'i eğitir"""
     import glob
     import os
     
-    print("=== Training Models ===")
-    rest_model = RestDetector(window_size=rest_window_samples)
-    rest_model.train() #burada datalar rest_model.py tarafından çağrıldığı için gesture_model kadar kod yok.
-    rest_model.save_model('rest_model.pkl')
-    print("✓ RestModel saved as rest_model.pkl (for real-time use)")
+    print("\n=== Training Personal Model (ptr) ===")
+    user_folder = 'user'
     
-    # Train GestureModel on segmented data from participant folders
-    print("\n2. Training GestureModel on segmented gesture data...")
+    if not os.path.exists(user_folder):
+        print(f"❌ Error: '{user_folder}' folder not found. Please calibrate first (cb).")
+        return False
+        
+    pgesture_data = {}
+    files = glob.glob(f'{user_folder}/*.npy')
+    # 'rest' ile başlamayan dosyaları filtrele
+    files = [f for f in files if not os.path.basename(f).startswith('rest')]
+    
+    if not files:
+        print("❌ Error: No gesture data found in 'user' folder.")
+        return False
+
+    for file in files:
+        basename = os.path.basename(file)
+        gesture_name = basename.split('_')[0]
+        if gesture_name not in pgesture_data:
+            pgesture_data[gesture_name] = []
+        pgesture_data[gesture_name].append(np.load(file))
+
+    print(f"Found {len(pgesture_data)} personal gestures:")
+    for name, samples in pgesture_data.items():
+        print(f"  - {name}: {len(samples)} samples")
+
+    # Modeli oluştur ve eğit
+    p_model = PersonalModel(window_size_samples=gesture_window_samples, sampling_rate=SAMPLINGHZ)
+    p_model.train(pgesture_data)
+    p_model.save_model('Pgesture_model.pkl')
+    print("✓ PersonalModel saved as Pgesture_model.pkl")
+    return True
+
+def Train():
+    """Sadece genel modelleri (Rest ve Genel Gesture) eğitir"""
+    import glob
+    import os
+    
+    print("\n=== Training General Models (tr) ===")
+    # 1. Rest Model Eğitimi
+    rest_model = RestDetector(window_size=rest_window_samples)
+    rest_model.train()
+    rest_model.save_model('rest_model.pkl')
+    
+    # 2. Genel GestureModel Eğitimi (p1-p6 arası veriler)
     gesture_data = {}
     for participant_id in range(1, 7):
         folder = f'rows_deleted/p{participant_id}'
-        if not os.path.exists(folder):
-            print(f"Warning: {folder} not found, skipping...")
-            continue
+        if not os.path.exists(folder): continue
         files = glob.glob(f'{folder}/*.npy')
-        # FILTER: only files NOT starting with "rest"
         files = [f for f in files if not os.path.basename(f).startswith('rest')]
         for file in files:
-            basename = os.path.basename(file)
-            gesture_name = basename.split('_')[0]
-            
+            gesture_name = os.path.basename(file).split('_')[0]
             if gesture_name not in gesture_data:
                 gesture_data[gesture_name] = []
-            
             gesture_data[gesture_name].append(np.load(file))
     
-    
-    print(f"Found {len(gesture_data)} gesture types:")
-    for gesture_name, samples in gesture_data.items():
-        print(f"  - {gesture_name}: {len(samples)} samples")
-    
-    gesture_model = GestureModel(window_size_samples=gesture_window_samples, sampling_rate=SAMPLINGHZ)
-    gesture_model.train(gesture_data)
-    gesture_model.save_model('gesture_model.pkl')
-    print("✓ GestureModel saved as gesture_model.pkl")
-
-    #train the personal model 
-    print("\n2. Training GestureModel on segmented user data...")
-    Pgesture_data = {}
-    for participant_id in range(1, 7):
-        folder = f'user'
-        if not os.path.exists(folder):
-            print(f"Warning: {folder} not found, skipping...")
-            continue
-        files = glob.glob(f'{folder}/*.npy')
-        # FILTER: only files NOT starting with "rest"
-        files = [f for f in files if not os.path.basename(f).startswith('rest')]
-        for file in files:
-            basename = os.path.basename(file)
-            gesture_name = basename.split('_')[0]
-            
-            if gesture_name not in Pgesture_data:
-                Pgesture_data[gesture_name] = []
-            
-            Pgesture_data[gesture_name].append(np.load(file))
-    
-    
-    print(f"Found {len(Pgesture_data)} gesture types:")
-    for gesture_name, samples in Pgesture_data.items():
-        print(f"  - {gesture_name}: {len(samples)} samples")
-    
-    Pgesture_model = GestureModel(window_size_samples=gesture_window_samples, sampling_rate=SAMPLINGHZ)
-    Pgesture_model.train(Pgesture_data)
-    Pgesture_model.save_model('Pgesture_model.pkl')
-    print("✓ GestureModel saved as Pgesture_model.pkl")
-    
-    
-    print("\n=== Training Complete! ===")
-    print("Models ready for real-time classification")
+    gen_model = GestureModel(window_size_samples=gesture_window_samples, sampling_rate=SAMPLINGHZ)
+    gen_model.train(gesture_data)
+    gen_model.save_model('gesture_model.pkl')
+    print("✓ General Models saved.")
     return True
+
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
            recording_flag, recording_gesture, is_running_flag, Pis_running_flag, system): 
     value = input("Enter your command majesty: ")
@@ -476,6 +471,11 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
         case "tr":  #train
             print("now will run train function")
             Train()
+        case "ptr":
+            print("Now running personal train function...")
+            success = TrainPersonal()
+            if success:
+                system._load_models() # Modeli güncel halini belleğe al
         case "cb":  #calibrate
             if not system.is_data_acquisition_running():
                 print("ERROR: Data acquisition not running. Use 'connect' first.")
@@ -607,7 +607,7 @@ class GestureSystem:
             if os.path.exists('gesture_model.pkl'):
                 self.gesture_model.load_model('gesture_model.pkl')
 
-            self.Pgesture_model = GestureModel(
+            self.Pgesture_model = PersonalModel(
                 window_size_samples=gesture_window_samples, 
                 sampling_rate=SAMPLINGHZ)
             if os.path.exists('Pgesture_model.pkl'):
