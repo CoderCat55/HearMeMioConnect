@@ -218,11 +218,11 @@ def startPcf():
             "message": "Data acquisition not running. Call /connect first."
         }), 400
     
-    _system.start_classification()
+    _system.start_personal_classification()
     
     return jsonify({
         "status": "success",
-        "message": "Classification started"
+        "message": "Personal classification started"
     })
 
 @app.route('/stopPcf')
@@ -234,12 +234,13 @@ def stopPcf():
             "message": "System not initialized"
         }), 500
     
-    _system.stop_classification()
+    _system.stop_personal_classification()
     
     return jsonify({
         "status": "success",
-        "message": "Classification stopped"
+        "message": "Personal classification stopped"
     })
+
 @app.route('/result')
 def result():
     global _latest_result, _result_history
@@ -329,7 +330,7 @@ def train():
 
 @app.route('/setcw')
 def setcw():
-    """Save calibration sample for a gesture"""
+    """Save calibration sample for a gesture (using rest-to-rest detection)"""
     if _system is None:
         return jsonify({
             "status": "error",
@@ -355,20 +356,23 @@ def setcw():
             "message": "Data acquisition not running. Call /connect first."
         }), 400
     
+    # Note: calibrate() now uses rest-to-rest detection (30s timeout)
     success = _system.calibrate(gesture_name)
     
     if success:
         return jsonify({
             "status": "success",
-            "message": f"Calibration sample saved for '{gesture_name}'",
-            "nextcal":"ok"
+            "message": f"Calibration sample saved for '{gesture_name}' using rest-to-rest detection",
+            "method": "rest_to_rest",
+            "nextcal": "ok"
         })
     else:
         return jsonify({
             "status": "error",
-            "message": "Calibration failed",
-            "nextcal":"notok"
+            "message": "Calibration failed or timed out (30s limit)",
+            "nextcal": "notok"
         }), 500
+
 
 @app.route('/status')
 def status():
@@ -388,20 +392,38 @@ def status():
         _system.gesture_model is not None and 
         _system.gesture_model.model is not None
     )
+    personal_model_trained = (
+        _system.Pgesture_model is not None and 
+        _system.Pgesture_model.model is not None
+    )
     
     # Get gesture labels if available
     gesture_labels = []
     if gesture_model_trained:
         gesture_labels = _system.gesture_model.gesture_labels
     
+    personal_gesture_labels = []
+    if personal_model_trained:
+        personal_gesture_labels = _system.Pgesture_model.gesture_labels
+    
+    # Determine which model is currently active
+    active_model = "none"
+    if _system.is_running_flag.value == 1:
+        active_model = "general"
+    elif _system.Pis_running_flag.value == 1:
+        active_model = "personal"
+    
     return jsonify({
         "status": "success",
         "data": {
             "data_acquisition_running": _system.is_data_acquisition_running(),
             "classification_running": _system.is_classification_running(),
+            "active_model": active_model,
             "rest_model_trained": rest_model_trained,
             "gesture_model_trained": gesture_model_trained,
+            "personal_model_trained": personal_model_trained,
             "available_gestures": gesture_labels,
+            "personal_gestures": personal_gesture_labels,
             "latest_result": _latest_result['cr'],
             "result_history": _result_history[-10:],  # Last 10 results
             "total_classifications": len(_result_history)

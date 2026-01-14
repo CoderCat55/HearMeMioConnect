@@ -99,45 +99,131 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             part2 = stream_buffer[:current_idx_wrapped]  # From beginning to current
             return np.concatenate([part1, part2])
         
-def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording_gesture):
-    """Called from main process when user wants to calibrate"""
-    # Reset calibration buffer
-    calib_index.value = 0
+def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, 
+              recording_flag, recording_gesture):
+    """
+    Calibrate using rest-to-rest detection (like classification)
+    Waits for: Rest -> Movement -> Rest, then saves the gesture
+    """
+    # Load rest model
+    rest_model = RestDetector(window_size=rest_window_samples)
+    if not rest_model.load_model('rest_model.pkl'):
+        print("ERROR: rest_model.pkl not found! Please train models first (command: tr)")
+        return False
     
-    # Set flag in shared memory
-    gesture_bytes = gesture_name.encode('utf-8')
-    for i, byte in enumerate(gesture_bytes[:50]):  # Max 50 chars
-        recording_gesture[i] = byte
-    recording_flag.value = 1  # Start recording
+    REST_WINDOW_SIZE = rest_window_samples
+    MIN_GESTURE_SAMPLES = 10  # Same as classification
     
-    #this part would change we will only gather gesture from rest to rest. just like how classificaiton is done from rest to rest calibration will also be from rest to rest.
-    #we wont need calibration duration
-    print("Recording... ", end='', flush=True)
-    for i in range(CALIBRATION_DURATION):
-        time.sleep(1)
-        print(f"{CALIBRATION_DURATION-i}... ", end='', flush=True)
-    print("Done!")
+    print(f"\n{'='*50}")
+    print(f"CALIBRATION MODE: {gesture_name}")
+    print(f"{'='*50}")
+    print("Instructions:")
+    print("  1. Keep your hand at REST position")
+    print("  2. When ready, perform the gesture")
+    print("  3. Return to REST position")
+    print("  4. System will auto-detect and save")
+    print(f"{'='*50}\n")
     
-    # Stop recording
-    recording_flag.value = 0
-    time.sleep(0.5)  # Let final batch flush
-    # Read recorded data
-    recorded_data = get_calibration_buffer_from_shared_mem(calib_buffer, calib_index)
+    print("⏳ Waiting for REST state...")
     
-    if recorded_data is None or len(recorded_data) == 0:
-        print("ERROR: No data was recorded! Check if Myos are connected.")
-        return
+    last_processed_idx = stream_index.value
+    gesture_start_idx = None
+    state = "WAITING_FOR_REST"  # States: WAITING_FOR_REST, READY, RECORDING
     
-    # Add to classifier
-    #classifier.add_calibration_sample(gesture_name, recorded_data)
+    start_time = time.time()
+    timeout = 30  # 30 second timeout
     
-    # Save to disk
-    import os
-    os.makedirs('user', exist_ok=True)
-    timestamp = int(time.time())
-    np.save(f'user/{gesture_name}_{timestamp}.npy', recorded_data)
-    
-    print(f"Calibration complete! Saved {len(recorded_data)} samples")
+    while True:
+        # Timeout check
+        if time.time() - start_time > timeout:
+            print("\n❌ TIMEOUT: Calibration cancelled (30s limit)")
+            return False
+        
+        # Get current position
+        current_idx = stream_index.value
+        
+        # Check if we have enough new data
+        if current_idx - last_processed_idx < 1:
+            time.sleep(0.002)
+            continue
+        
+        # Need minimum data to check rest
+        if current_idx < REST_WINDOW_SIZE:
+            time.sleep(0.01)
+            continue
+        
+        # Extract latest window for rest check
+        r_end = current_idx % STREAM_BUFFER_SIZE
+        r_start = (current_idx - REST_WINDOW_SIZE) % STREAM_BUFFER_SIZE
+        
+        if r_start < r_end:
+            rest_check_data = stream_buffer[r_start:r_end]
+        else:
+            rest_check_data = np.concatenate([stream_buffer[r_start:], stream_buffer[:r_end]])
+        
+        # Predict state
+        is_rest = rest_model.predict(rest_check_data)
+        
+        # STATE MACHINE
+        if state == "WAITING_FOR_REST":
+            if is_rest:
+                state = "READY"
+                print("✓ REST detected. You may now perform the gesture...")
+        
+        elif state == "READY":
+            if not is_rest:
+                # Gesture started!
+                gesture_start_idx = current_idx - REST_WINDOW_SIZE
+                state = "RECORDING"
+                print(f"⚡ Movement detected! Recording started at index {gesture_start_idx}...")
+        
+        elif state == "RECORDING":
+            if is_rest:
+                # Gesture ended!
+                gesture_end_idx = current_idx
+                duration_samples = gesture_end_idx - gesture_start_idx
+                
+                # Check minimum duration
+                if duration_samples < MIN_GESTURE_SAMPLES:
+                    print(f"⚠️  Gesture too short ({duration_samples} samples), ignoring. Try again...")
+                    state = "READY"
+                    gesture_start_idx = None
+                    continue
+                
+                print(f"🛑 Movement ended! Captured {duration_samples} samples")
+                
+                # Extract the full gesture from stream buffer
+                g_start_wrapped = gesture_start_idx % STREAM_BUFFER_SIZE
+                g_end_wrapped = gesture_end_idx % STREAM_BUFFER_SIZE
+                
+                if g_start_wrapped < g_end_wrapped:
+                    recorded_data = stream_buffer[g_start_wrapped:g_end_wrapped].copy()
+                else:
+                    recorded_data = np.concatenate([
+                        stream_buffer[g_start_wrapped:], 
+                        stream_buffer[:g_end_wrapped]
+                    ])
+                
+                # Save to disk
+                os.makedirs('user', exist_ok=True)
+                timestamp = int(time.time())
+                filepath = f'user/{gesture_name}_{timestamp}.npy'
+                np.save(filepath, recorded_data)
+                
+                print(f"✅ CALIBRATION COMPLETE!")
+                print(f"   Saved: {filepath}")
+                print(f"   Samples: {len(recorded_data)}")
+                print(f"   Duration: {len(recorded_data)/SAMPLINGHZ:.2f}s")
+                
+                return True
+            
+            # Safety: Check for buffer overflow
+            elif (current_idx - gesture_start_idx) >= STREAM_BUFFER_SIZE:
+                print("⚠️  Buffer overflow: Gesture too long, resetting. Try again...")
+                state = "READY"
+                gesture_start_idx = None
+        
+        last_processed_idx = current_idx
 
 def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, result_queue, STREAM_BUFFER_SIZE, samplingrate):
     """Process 2: Runs classification using Rest-to-Rest strategy"""
@@ -163,13 +249,14 @@ def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, re
     
     gesture_model = GestureModel(window_size_samples=200, sampling_rate=samplingrate)
     if not gesture_model.load_model('gesture_model.pkl'):
-        result_queue.put("ERROR: Could not load gesture_model.pkl")
+        result_queue.put("ERROR: Could not load gesture_model.pkl it might benot trained yet")
         return
     
     #personal gesture model that will be trained on data in 'user folder'
     Pgesture_model = GestureModel(window_size_samples=200, sampling_rate=samplingrate)
     if not Pgesture_model.load_model('Pgesture_model.pkl'):
-        result_queue.put("ERROR: Could not load gesture_model.pkl")
+        result_queue.put("ERROR: Could not load Pgesture_model.pkl (personal model not trained yet)")
+        Pgesture_model = None  # Mark as unavailable
         return
     
     result_queue.put("✓ Classification process ready! (Waiting for Non-Rest to Rest sequence)")
@@ -181,10 +268,27 @@ def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, re
         #is_running_flag would control general model that is trained on p1-p6
         #Pis_running_flag would control the personal model that is only trained on data inside 'user' folder
 
-        if is_running_flag.value == 0:
+        # Check which model should be active
+        using_general_model = (is_running_flag.value == 1)
+        using_personal_model = (Pis_running_flag.value == 1)
+        
+        # If neither is active, sleep and continue
+        if not using_general_model and not using_personal_model:
             time.sleep(0.01)
             continue
         
+        # Select the active model
+        if using_personal_model:
+            if Pgesture_model is None:
+                result_queue.put("ERROR: Personal model not trained! Please train first.")
+                Pis_running_flag.value = 0  # Auto-stop
+                continue
+            active_model = Pgesture_model
+            model_type = "Personal"
+        else:
+            active_model = gesture_model
+            model_type = "General"
+
         # 1. Get current absolute position
         current_idx = stream_index.value
         
@@ -244,17 +348,23 @@ def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, re
                             stream_buffer[g_start_wrapped:], 
                             stream_buffer[:g_end_wrapped]
                         ])
-                    
-                    features = gesture_model.extract_features(full_gesture_data)
+                    #
+                    features = active_model.extract_features(full_gesture_data)
                     result_queue.put(f"DEBUG: features shape = {features.shape}")
                     result_queue.put(f"DEBUG: features sample = {features[:5]}")
 
-                    result = gesture_model.classify(features)
+                    result = active_model.classify(features)
                     result_queue.put(f"DEBUG: Raw result = '{result}'")
                     result_queue.put(f"DEBUG: Result type = {type(result)}")
                     result_queue.put(f"DEBUG: Result repr = {repr(result)}")
 
-                    result_queue.put(f"🎯 RESULT: {result}")
+                    # Add model type prefix to differentiate results
+                    if model_type == "Personal":
+                        result_with_prefix = f"P_{result}"
+                    else:
+                        result_with_prefix = result
+
+                    result_queue.put(f"🎯 RESULT ({model_type} Model): {result_with_prefix}")
 
                     # Send result to webserver
                     try:
@@ -370,10 +480,10 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             if not system.is_data_acquisition_running():
                 print("ERROR: Data acquisition not running. Use 'connect' first.")
             else:
-                print("now will run calibrate function")
                 gesture_name = input("Which gesture would you like to calibrate? ")
-                Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, 
-                         recording_gesture)
+                success = Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, recording_flag, recording_gesture)
+                if success:
+                    print("\n Tip: Run 'tr' to retrain the personal model with new data")
         case "startcf":
             if not system.is_data_acquisition_running():
                 print("ERROR: Data acquisition not running. Use 'connect' first.")
@@ -585,6 +695,20 @@ class GestureSystem:
     def is_classification_running(self):
         """Check if classification is active"""
         return bool(self.is_running_flag.value)
+    def start_personal_classification(self):
+        """Enable personal classification (set Pis_running_flag to 1)"""
+        self.is_running_flag.value = 0  # Stop general model
+        self.Pis_running_flag.value = 1
+        print("✓ Personal classification enabled")
+
+    def stop_personal_classification(self):
+        """Disable personal classification (set Pis_running_flag to 0)"""
+        self.Pis_running_flag.value = 0
+        print("✓ Personal classification disabled")
+
+    def is_personal_classification_running(self):
+        """Check if personal classification is active"""
+        return bool(self.Pis_running_flag.value)
     
     def start_monitor_thread(self):
         """Start thread to monitor classification results"""
@@ -603,14 +727,15 @@ class GestureSystem:
             return False
         
         try:
-            Calibrate(
-                gesture_name, 
-                self.calib_buffer, 
-                self.calib_index,
-                self.recording_flag, 
-                self.recording_gesture
-            )
-            return True
+            success = Calibrate(
+            gesture_name,
+            self.stream_buffer,
+            self.stream_index,
+            self.calib_buffer, 
+            self.calib_index,
+            self.recording_flag, 
+            self.recording_gesture)
+            return success
         except Exception as e:
             print(f"Calibration failed: {e}")
             return False
@@ -703,6 +828,7 @@ if __name__ == "__main__":
                 system.recording_flag, 
                 system.recording_gesture,
                 system.is_running_flag,
+                system.Pis_running_flag,
                 system
             )
     except KeyboardInterrupt:
