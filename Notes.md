@@ -28,6 +28,9 @@
 * these data would be our training data. we might further optimize it by delting the half files but this will be considered another time
 
 # models
+## Questions
+How to choose an ML model for the system, which criteria should be met?
+How ML models are classified, which type of models there are?
 * Gesture Model
 >>a multiclass model will be trained on all data except for "rest" datas from all participants
 
