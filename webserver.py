@@ -203,6 +203,43 @@ def stopcf():
         "message": "Classification stopped"
     })
 
+@app.route('/startPcf')
+def startPcf():
+    """Start personal classification"""
+    if _system is None:
+        return jsonify({
+            "status": "error",
+            "message": "System not initialized"
+        }), 500
+    
+    if not _system.is_data_acquisition_running():
+        return jsonify({
+            "status": "error",
+            "message": "Data acquisition not running. Call /connect first."
+        }), 400
+    
+    _system.start_classification()
+    
+    return jsonify({
+        "status": "success",
+        "message": "Classification started"
+    })
+
+@app.route('/stopPcf')
+def stopPcf():
+    """Stop personal classification"""
+    if _system is None:
+        return jsonify({
+            "status": "error",
+            "message": "System not initialized"
+        }), 500
+    
+    _system.stop_classification()
+    
+    return jsonify({
+        "status": "success",
+        "message": "Classification stopped"
+    })
 @app.route('/result')
 def result():
     global _latest_result, _result_history

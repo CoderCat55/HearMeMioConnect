@@ -1,3 +1,10 @@
+# ToDo
+I want to add another model "personal model" which only be trained on the data inside 'user' folder.
+the gestures would be recorded from rest position to rest pos,ition just like the classificaiton works = calibrate function will do that instead of saving for 3 seconds of savings.
+Also webserver and commsnd function would be able to control starting ond stoppiing of the personal model as well as the general model. Results of the personal model will be broadcasted the same way general gesture model does in order to maintain minimal changes and avoid extra code
+
+DO NOT FORGET THE RULES
+
 # RULES: 
 Please really read all the code. 
 Do not make assumptions while answering. 
@@ -18,12 +25,6 @@ WHAT IS EXPECTED FROM THIS CODE. WHAT CAN IT DO. WHICH MISMATCHES HAVE YOU SPOTT
 
 
 # system overview
-Okay as you can see we have a c++ code and a python code
-c++ code is just for reference it used to be my old code. Now we are improving it
-We got raspberyy pi 5 instead of esp32 and myo armbands (2) instead of other sensors.
-We will be running more advanced ML like svm instead of knn.
-also we will be recognizing dynamic gestures not just statics so we need some kind of time seriss of data
-This is a real time system. 
 
 main.py the file user will run also where user will give commands frequently
 it initializes processes. getdata process and main.py is always running
@@ -37,23 +38,5 @@ classification and commanding should run simulteneusly so I can start-stop class
 we will have 2 models which they will need seperate classes restmodel and classifymodel class:
 model1(the rest model) in rest_model1.py It can accurately recognize if a gesture is rest or not.
 
-
 ----------------- already done left to gain basic understanding of the system --------------------------
-
-# ToDo
-We will do webserver implementation to our current code webserver would be a process so it wont disturb other processes running just controlling them.
-Since webserver will be initilazed first and wil control other events like starting data aqcusiiton etc. it can be a good idea to put some functions inside main.py into a class "systemclass" which handles shared memory initillization, data acqusiiton etc. then injekt to webserver so that webserver can control the processes. 
-In order to get the classificaiton result classify function will make a http get request to /result endpoint with result value.
-webserver would be a thread
-
-classify'daki result anlık olarak değişmeli eğer bir resuşt gönderilmeyecekse o endpointe erişilmemeli. 
-get-result endpointine eriştiğimde eski classificaiton resultarını görüyorum.
-
-classify resultlarının geçmişini status endpointinde görebilmeliyiz
-
-
-
-DO NOT FORGET THE RULES
-
-
 

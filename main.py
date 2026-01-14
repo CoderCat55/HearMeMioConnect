@@ -101,14 +101,6 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
         
 def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording_gesture):
     """Called from main process when user wants to calibrate"""
-    """print(f"Calibration will start in ", end='', flush=True)
-    for i in range(CALIBRATION_STARTS, 0, -1):
-        print(f"{i}... ", end='', flush=True)
-        time.sleep(1)
-    print("\n")
-    print(f"Recording calibration for '{gesture_name}' - '{CALIBRATION_DURATION} seconds...")
-    """ 
-    #şimdilik veri toplayacağumuz için burası kapalı.
     # Reset calibration buffer
     calib_index.value = 0
     
@@ -118,7 +110,8 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording
         recording_gesture[i] = byte
     recording_flag.value = 1  # Start recording
     
-    # Wait 3 seconds
+    #this part would change we will only gather gesture from rest to rest. just like how classificaiton is done from rest to rest calibration will also be from rest to rest.
+    #we wont need calibration duration
     print("Recording... ", end='', flush=True)
     for i in range(CALIBRATION_DURATION):
         time.sleep(1)
@@ -140,15 +133,15 @@ def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording
     
     # Save to disk
     import os
-    os.makedirs('calibration_data', exist_ok=True)
+    os.makedirs('user', exist_ok=True)
     timestamp = int(time.time())
-    np.save(f'calibration_data/{gesture_name}_{timestamp}.npy', recorded_data)
+    np.save(f'user/{gesture_name}_{timestamp}.npy', recorded_data)
     
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
-"""Calibrate funcitoan will be dealt with later"""
 
-def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREAM_BUFFER_SIZE, samplingrate):
+def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, result_queue, STREAM_BUFFER_SIZE, samplingrate):
     """Process 2: Runs classification using Rest-to-Rest strategy"""
+    """Addition another gesture model that only be trained on data inside 'user' folder """
     import time
     import numpy as np
     from multiprocessing import shared_memory
@@ -168,9 +161,14 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
         result_queue.put("ERROR: Could not load rest_model.pkl")
         return
     
-    # Note: We still load GestureModel, but we will feed it variable length data now
     gesture_model = GestureModel(window_size_samples=200, sampling_rate=samplingrate)
     if not gesture_model.load_model('gesture_model.pkl'):
+        result_queue.put("ERROR: Could not load gesture_model.pkl")
+        return
+    
+    #personal gesture model that will be trained on data in 'user folder'
+    Pgesture_model = GestureModel(window_size_samples=200, sampling_rate=samplingrate)
+    if not Pgesture_model.load_model('Pgesture_model.pkl'):
         result_queue.put("ERROR: Could not load gesture_model.pkl")
         return
     
@@ -180,6 +178,9 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
     gesture_start_idx = None  # State variable: None = Waiting, Int = Recording
     
     while True:
+        #is_running_flag would control general model that is trained on p1-p6
+        #Pis_running_flag would control the personal model that is only trained on data inside 'user' folder
+
         if is_running_flag.value == 0:
             time.sleep(0.01)
             continue
@@ -244,11 +245,6 @@ def Classify(stream_mem_name, stream_index, is_running_flag, result_queue, STREA
                             stream_buffer[:g_end_wrapped]
                         ])
                     
-                    # CLASSIFY
-                    # Note: full_gesture_data size is variable now. 
-                    # extract_features handles this, but model accuracy depends on training data.
-                    # CLASSIFY
-                    # CLASSIFY
                     features = gesture_model.extract_features(full_gesture_data)
                     result_queue.put(f"DEBUG: features shape = {features.shape}")
                     result_queue.put(f"DEBUG: features sample = {features[:5]}")
@@ -322,12 +318,43 @@ def Train():
     gesture_model.train(gesture_data)
     gesture_model.save_model('gesture_model.pkl')
     print("✓ GestureModel saved as gesture_model.pkl")
+
+    #train the personal model 
+    print("\n2. Training GestureModel on segmented user data...")
+    Pgesture_data = {}
+    for participant_id in range(1, 7):
+        folder = f'user'
+        if not os.path.exists(folder):
+            print(f"Warning: {folder} not found, skipping...")
+            continue
+        files = glob.glob(f'{folder}/*.npy')
+        # FILTER: only files NOT starting with "rest"
+        files = [f for f in files if not os.path.basename(f).startswith('rest')]
+        for file in files:
+            basename = os.path.basename(file)
+            gesture_name = basename.split('_')[0]
+            
+            if gesture_name not in Pgesture_data:
+                Pgesture_data[gesture_name] = []
+            
+            Pgesture_data[gesture_name].append(np.load(file))
+    
+    
+    print(f"Found {len(Pgesture_data)} gesture types:")
+    for gesture_name, samples in Pgesture_data.items():
+        print(f"  - {gesture_name}: {len(samples)} samples")
+    
+    Pgesture_model = GestureModel(window_size_samples=gesture_window_samples, sampling_rate=SAMPLINGHZ)
+    Pgesture_model.train(Pgesture_data)
+    Pgesture_model.save_model('Pgesture_model.pkl')
+    print("✓ GestureModel saved as Pgesture_model.pkl")
+    
     
     print("\n=== Training Complete! ===")
     print("Models ready for real-time classification")
     return True
 def Command(stream_buffer, stream_index, calib_buffer, calib_index, 
-           recording_flag, recording_gesture, is_running_flag, system): 
+           recording_flag, recording_gesture, is_running_flag, Pis_running_flag, system): 
     value = input("Enter your command majesty: ")
     match value:
         case "connect":
@@ -351,11 +378,24 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             if not system.is_data_acquisition_running():
                 print("ERROR: Data acquisition not running. Use 'connect' first.")
             else:
-                print("starting classification")
+                print("starting general classification")
                 is_running_flag.value = 1
+                Pis_running_flag.value = 0
         case "stopcf":
-            print("stopping classification")
+            print("stopping all classification")
             is_running_flag.value = 0
+            Pis_running_flag.value = 0
+        case "startPcf":
+            if not system.is_data_acquisition_running():
+                print("ERROR: Data acquisition not running. Use 'connect' first.")
+            else:
+                print("starting personal classification")
+                Pis_running_flag.value = 1
+                is_running_flag.value = 0
+        case "stopPcf":
+            print("stopping all classification")
+            is_running_flag.value = 0
+            Pis_running_flag.value = 0
         case "debug":
             print(f"Data acquisition running: {system.is_data_acquisition_running()}")
             print(f"Stream index: {stream_index.value}")
@@ -392,6 +432,7 @@ class GestureSystem:
         self.recording_flag = None
         self.recording_gesture = None
         self.is_running_flag = None
+        self.Pis_running_flag = None
         self.result_queue = None
         
         # Process/thread handles
@@ -438,6 +479,7 @@ class GestureSystem:
         self.recording_flag = mp.Value('i', 0)
         self.recording_gesture = mp.Array('c', 50)
         self.is_running_flag = mp.Value('i', 0)
+        self.Pis_running_flag = mp.Value('i', 0)
         self.result_queue = mp.Queue()
         
         print("✓ Shared memory initialized")
@@ -451,10 +493,16 @@ class GestureSystem:
             
             self.gesture_model = GestureModel(
                 window_size_samples=gesture_window_samples, 
-                sampling_rate=SAMPLINGHZ
-            )
+                sampling_rate=SAMPLINGHZ)
             if os.path.exists('gesture_model.pkl'):
                 self.gesture_model.load_model('gesture_model.pkl')
+
+            self.Pgesture_model = GestureModel(
+                window_size_samples=gesture_window_samples, 
+                sampling_rate=SAMPLINGHZ)
+            if os.path.exists('Pgesture_model.pkl'):
+                self.gesture_model.load_model('Pgesture_model.pkl')
+                
         except Exception as e:
             print(f"Note: Models not loaded yet ({e})")
     
@@ -511,6 +559,7 @@ class GestureSystem:
                 self.shm_stream.name, 
                 self.stream_index, 
                 self.is_running_flag,
+                self.Pis_running_flag,
                 self.result_queue,
                 STREAM_BUFFER_SIZE,
                 SAMPLINGHZ

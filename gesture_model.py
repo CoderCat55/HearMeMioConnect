@@ -130,7 +130,7 @@ class GestureModel:
         self.model = model_data['model']
         self.scaler = model_data['scaler']
         self.gesture_labels = model_data['gesture_labels']
-        self.window_size_samples = model_data['window_size_samples']  # Changed from window_size_ms
+        self.window_size_samples = model_data['window_size_samples'] 
         self.sampling_rate = model_data['sampling_rate']
         self.samples_per_window = model_data['samples_per_window']
         self.stride = model_data['stride']
