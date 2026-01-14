@@ -107,7 +107,7 @@ class GestureModel:
         # Optional: Save Confusion Matrix as Image
         try:
             plt.figure(figsize=(10, 8))
-            sns.heatmap(cm, annot=True, fmt='d', xticklabels=self.gesture_labels, yticklabels=self.gesture_labels)
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=self.gesture_labels, yticklabels=self.gesture_labels)
             plt.title('Gesture Confusion Matrix')
             plt.ylabel('True Label')
             plt.xlabel('Predicted Label')

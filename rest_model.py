@@ -6,6 +6,8 @@ import pickle
 import os
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 import pandas as pd # Optional, for nicer saving, but standard file I/O works too
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 class RestDetector:
     #  binary SVM for understanding if data is rest or not
@@ -135,6 +137,18 @@ class RestDetector:
             f.write(report)
             
         print("✓ Detailed Rest results saved to 'rest_model_results.txt'")
+        
+        # Optional: Save Confusion Matrix as Image
+        try:
+            plt.figure(figsize=(8, 6))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Rest', 'Non-Rest'], yticklabels=['Rest', 'Non-Rest'])
+            plt.title('Rest Model Confusion Matrix')
+            plt.ylabel('True Label')
+            plt.xlabel('Predicted Label')
+            plt.savefig('rest_confusion_matrix.png')
+            plt.close()
+        except Exception as e:
+            print(f"Could not save image: {e}")
         # --- NEW CODE END ---
         
         return True
