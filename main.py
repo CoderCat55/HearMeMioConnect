@@ -16,7 +16,7 @@ rest_window_samples = 20  #note if you are gonna change this change it also in c
 gesture_window_samples = 200
 
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at SAMPLINGHZ
-CALIBRATION_BUFFER_SIZE = 250  # ~3 seconds at SAMPLINGHZ
+CALIBRATION_BUFFER_SIZE = 1000  # ~3 seconds at SAMPLINGHZ
 
 CALIBRATION_DURATION = 3  
 CLASSIFICATION_DURATION = 3 
@@ -101,13 +101,13 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
         
 def Calibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording_gesture):
     """Called from main process when user wants to calibrate"""
-    """print(f"Calibration will start in ", end='', flush=True)
+    print(f"Calibration will start in ", end='', flush=True)
     for i in range(CALIBRATION_STARTS, 0, -1):
         print(f"{i}... ", end='', flush=True)
         time.sleep(1)
     print("\n")
     print(f"Recording calibration for '{gesture_name}' - '{CALIBRATION_DURATION} seconds...")
-    """ 
+    
     #şimdilik veri toplayacağumuz için burası kapalı.
     # Reset calibration buffer
     calib_index.value = 0
