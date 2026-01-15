@@ -226,6 +226,42 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
         
         last_processed_idx = current_idx
 
+def GeneralCalibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording_gesture):
+    """Called from main process when user wants to calibrate"""
+    print(f"Calibration will start in ", end='', flush=True)
+    for i in range(CALIBRATION_STARTS, 0, -1):
+        print(f"{i}... ", end='', flush=True)
+        time.sleep(1)
+    print("\n")
+    print(f"Recording calibration for '{gesture_name}' - '{CALIBRATION_DURATION} seconds...")
+    
+    #şimdilik veri toplayacağumuz için burası kapalı.
+    # Reset calibration buffer
+    calib_index.value = 0
+    
+    # Set flag in shared memory
+    gesture_bytes = gesture_name.encode('utf-8')
+    for i, byte in enumerate(gesture_bytes[:50]):  # Max 50 chars
+        recording_gesture[i] = byte
+    recording_flag.value = 1  # Start recording
+    
+    # Wait 3 seconds
+    print("Recording... ", end='', flush=True)
+    for i in range(CALIBRATION_DURATION):
+        time.sleep(1)
+        print(f"{CALIBRATION_DURATION-i}... ", end='', flush=True)
+    print("Done!")
+    
+    # Stop recording
+    recording_flag.value = 0
+    time.sleep(0.5)  # Let final batch flush
+    # Read recorded data
+    recorded_data = get_calibration_buffer_from_shared_mem(calib_buffer, calib_index)
+    
+    if recorded_data is None or len(recorded_data) == 0:
+        print("ERROR: No data was recorded! Check if Myos are connected.")
+        return
+
 def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, result_queue, STREAM_BUFFER_SIZE, samplingrate):
     """Process 2: Runs classification using Rest-to-Rest strategy"""
     """Addition another gesture model that only be trained on data inside 'user' folder """
@@ -484,6 +520,15 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
                 success = Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, recording_flag, recording_gesture)
                 if success:
                     print("\n Tip: Run 'tr' to retrain the personal model with new data")
+        case "gcb":  #calibrate
+            if not system.is_data_acquisition_running():
+                print("ERROR: Data acquisition not running. Use 'connect' first.")
+            else:
+                gesture_name = input("Which gesture would you like to calibrate? ")
+                success = GeneralCalibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, recording_flag, recording_gesture)
+                if success:
+                    print("\n Tip: Run 'tr' to retrain the personal model with new data")
+       
         case "startcf":
             if not system.is_data_acquisition_running():
                 print("ERROR: Data acquisition not running. Use 'connect' first.")
