@@ -1,4 +1,4 @@
-# gesture_model.py
+# personal_model.py
 from sklearn import svm
 from sklearn.neighbors import KNeighborsClassifier  # Changed from svm/RandomForest
 from sklearn.preprocessing import StandardScaler
@@ -8,13 +8,16 @@ import os
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA # ADD THIS
+
 class PersonalModel:
     def __init__(self, window_size_samples, sampling_rate):
         # Changed to KNeighborsClassifier
         # n_neighbors=5 is a standard starting point; you can adjust this (e.g., 3 or 7)
         self.model = KNeighborsClassifier(n_neighbors=3, weights='distance') 
-        
         self.scaler = StandardScaler()
+        self.pca = PCA(n_components=0.95) # <--- ADD THIS LINE
         self.window_size_samples = window_size_samples
         self.sampling_rate = sampling_rate
         self.gesture_labels = []
@@ -32,27 +35,21 @@ class PersonalModel:
         features = []
         for channel in range(time_series_data.shape[1]):
             channel_data = time_series_data[:, channel]
-            # Mevcut Özellikler
+            
             mean_val = np.mean(channel_data)
             std_val = np.std(channel_data)
             min_val = np.min(channel_data)
             max_val = np.max(channel_data)
             range_val = max_val - min_val
             
-            # YENİ: RMS (Root Mean Square) - Sinyal Gücü
-            rms_val = np.sqrt(np.mean(channel_data**2))
-            
-            # YENİ: Zero Crossing Rate - Sinyal Hızı/Frekansı
-            # Sinyalin sıfır noktasını kaç kez kestiğini sayar
-            zero_crossings = np.where(np.diff(np.sign(channel_data)))[0].size / len(channel_data)
+            # Deleted: rms_val and zero_crossings calculations
             
             features.extend([
                 mean_val, std_val, min_val, max_val, 
-                range_val, rms_val, zero_crossings
+                range_val
             ])
             
         return np.array(features)
-
     
     def train(self, gesture_data):
         X_train, y_train, X_test, y_test = [], [], [], []
@@ -83,12 +80,14 @@ class PersonalModel:
 
         # Eğitim ve test setlerini oluştur
         X_train_scaled = self.scaler.fit_transform(np.array(X_train))
-        self.model.fit(X_train_scaled, y_train)
+        X_train_pca = self.pca.fit_transform(X_train_scaled)
+        self.model.fit(X_train_pca, y_train)
 
         # Accuracy ölçümü (İsteğe bağlı)
         if len(X_test) > 0:
             X_test_scaled = self.scaler.transform(np.array(X_test))
-            y_pred = self.model.predict(X_test_scaled)
+            X_test_pca = self.pca.transform(X_test_scaled)
+            y_pred = self.model.predict(X_test_pca)
             acc = accuracy_score(y_test, y_pred)
             print(f"Personal Model Accuracy: %{acc * 100:.2f}")
 
@@ -102,13 +101,15 @@ class PersonalModel:
             features = features.reshape(1, -1)
         
         features_scaled = self.scaler.transform(features)
-        prediction = self.model.predict(features_scaled)
+        features_pca = self.pca.transform(features_scaled) # ADD THIS
+        prediction = self.model.predict(features_pca)      # CHANGE THIS
         return prediction[0]
     
     def save_model(self, filepath):
         model_data = {
             'model': self.model,
             'scaler': self.scaler,
+            'pca': self.pca, # ADD THIS
             'gesture_labels': self.gesture_labels,
             'window_size_samples': self.window_size_samples,  # Changed from window_size_ms
             'sampling_rate': self.sampling_rate,
@@ -134,6 +135,7 @@ class PersonalModel:
         self.sampling_rate = model_data['sampling_rate']
         self.samples_per_window = model_data['samples_per_window']
         self.stride = model_data['stride']
-        
+        self.pca = model_data.get('pca') # ADD THIS
+
         print(f"GestureModel loaded from {filepath}")
         return True

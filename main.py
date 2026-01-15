@@ -14,7 +14,7 @@ import threading
 SAMPLINGHZ= 50
 # Calculate window sizes
 rest_window_samples = 20  #note if you are gonna change this change it also in classify function
-gesture_window_samples = 75
+gesture_window_samples = 200
 
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at SAMPLINGHZ
 CALIBRATION_BUFFER_SIZE = 250  # ~3 seconds at SAMPLINGHZ
