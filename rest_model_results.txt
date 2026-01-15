@@ -1,15 +1,15 @@
-Rest Model Accuracy: 99.77%
+Rest Model Accuracy: 99.59%
 
 Confusion Matrix:
-[[ 1565    13]
- [   30 16958]]
+[[ 2100    24]
+ [   55 16933]]
 
 Classification Report:
               precision    recall  f1-score   support
 
-        Rest       0.98      0.99      0.99      1578
+        Rest       0.97      0.99      0.98      2124
     Non-Rest       1.00      1.00      1.00     16988
 
-    accuracy                           1.00     18566
-   macro avg       0.99      0.99      0.99     18566
-weighted avg       1.00      1.00      1.00     18566
+    accuracy                           1.00     19112
+   macro avg       0.99      0.99      0.99     19112
+weighted avg       1.00      1.00      1.00     19112
