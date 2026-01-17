@@ -99,61 +99,56 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             part1 = stream_buffer[start_idx_wrapped:]  # From start to end of buffer
             part2 = stream_buffer[:current_idx_wrapped]  # From beginning to current
             return np.concatenate([part1, part2])
-        
+
 def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, 
               recording_flag, recording_gesture):
     """
-    Calibrate using rest-to-rest detection (like classification)
-    Waits for: Rest -> Movement -> Rest, then saves the gesture
+    Hassas Rest-to-Rest kalibrasyonu: Sadece REST_THRESHOLD (stabilizasyon) korumalı, 
+    hareket algılandığı an gecikmesiz kayda başlayan sürüm.
     """
-    # Load rest model
+    import os
+    import time
+    import numpy as np
+    
+    # 1. Hazırlık ve Model Yükleme
     rest_model = RestDetector(window_size=rest_window_samples)
     if not rest_model.load_model('rest_model.pkl'):
-        print("ERROR: rest_model.pkl not found! Please train models first (command: tr)")
+        print("ERROR: rest_model.pkl bulunamadı! Lütfen önce 'tr' ile eğitin.")
         return False
     
     REST_WINDOW_SIZE = rest_window_samples
-    MIN_GESTURE_SAMPLES = 10  # Same as classification
+    MIN_GESTURE_SAMPLES = 10 
     
-    print(f"\n{'='*50}")
-    print(f"CALIBRATION MODE: {gesture_name}")
-    print(f"{'='*50}")
-    print("Instructions:")
-    print("  1. Keep your hand at REST position")
-    print("  2. When ready, perform the gesture")
-    print("  3. Return to REST position")
-    print("  4. System will auto-detect and save")
-    print(f"{'='*50}\n")
-    
-    print("⏳ Waiting for REST state...")
+    # 2. Değişkenler
+    state = "WAITING_FOR_REST"
+    rest_counter = 0
+    REST_THRESHOLD = 5  # Stabilite için biraz artırdım (~0.3 sn)
     
     last_processed_idx = stream_index.value
     gesture_start_idx = None
-    state = "WAITING_FOR_REST"  # States: WAITING_FOR_REST, READY, RECORDING
-    
     start_time = time.time()
-    timeout = 30  # 30 second timeout
-    
+    timeout = 30 
+
+    print(f"\n{'='*50}")
+    print(f"KALİBRASYON: {gesture_name}")
+    print(f"{'='*50}")
+    print("Sistem stabilize ediliyor, lütfen elinizi DİNLENME konumunda tutun...")
+
     while True:
-        # Timeout check
         if time.time() - start_time > timeout:
-            print("\n❌ TIMEOUT: Calibration cancelled (30s limit)")
+            print("\n❌ ZAMAN AŞIMI: Kalibrasyon iptal edildi.")
             return False
-        
-        # Get current position
+            
         current_idx = stream_index.value
         
-        # Check if we have enough new data
         if current_idx - last_processed_idx < 1:
             time.sleep(0.002)
             continue
-        
-        # Need minimum data to check rest
+            
         if current_idx < REST_WINDOW_SIZE:
-            time.sleep(0.01)
             continue
-        
-        # Extract latest window for rest check
+
+        # --- REST DETECTION (Dairesel Buffer Dilimleme) ---
         r_end = current_idx % STREAM_BUFFER_SIZE
         r_start = (current_idx - REST_WINDOW_SIZE) % STREAM_BUFFER_SIZE
         
@@ -161,68 +156,66 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
             rest_check_data = stream_buffer[r_start:r_end]
         else:
             rest_check_data = np.concatenate([stream_buffer[r_start:], stream_buffer[:r_end]])
-        
-        # Predict state
+
         is_rest = rest_model.predict(rest_check_data)
         
-        # STATE MACHINE
+        # --- STATE MACHINE ---
         if state == "WAITING_FOR_REST":
             if is_rest:
-                state = "READY"
-                print("✓ REST detected. You may now perform the gesture...")
-        
+                rest_counter += 1
+                if rest_counter >= REST_THRESHOLD:
+                    state = "READY"
+                    rest_counter = 0
+                    print("✓ HAZIR! Hareketi yaptığınız an kayıt başlayacaktır...")
+            else:
+                rest_counter = 0
+
         elif state == "READY":
             if not is_rest:
-                # Gesture started!
+                # GECİKMESİZ BAŞLATMA: Hareket algılandığı an kayda gir
                 gesture_start_idx = current_idx - REST_WINDOW_SIZE
                 state = "RECORDING"
-                print(f"⚡ Movement detected! Recording started at index {gesture_start_idx}...")
-        
+                print(f"⚡ Hareket algılandı, kaydediliyor...")
+
         elif state == "RECORDING":
             if is_rest:
-                # Gesture ended!
+                # Hareket bitti
                 gesture_end_idx = current_idx
-                duration_samples = gesture_end_idx - gesture_start_idx
+                duration = gesture_end_idx - gesture_start_idx
                 
-                # Check minimum duration
-                if duration_samples < MIN_GESTURE_SAMPLES:
-                    print(f"⚠️  Gesture too short ({duration_samples} samples), ignoring. Try again...")
+                if duration < MIN_GESTURE_SAMPLES:
+                    print(f"⚠️ Hareket çok kısa ({duration} sample), lütfen tekrar deneyin...")
                     state = "READY"
-                    gesture_start_idx = None
                     continue
                 
-                print(f"🛑 Movement ended! Captured {duration_samples} samples")
-                
-                # Extract the full gesture from stream buffer
+                # --- VERİYİ ÇEK VE CALIB_BUFFER'A YAZ ---
                 g_start_wrapped = gesture_start_idx % STREAM_BUFFER_SIZE
                 g_end_wrapped = gesture_end_idx % STREAM_BUFFER_SIZE
                 
                 if g_start_wrapped < g_end_wrapped:
-                    recorded_data = stream_buffer[g_start_wrapped:g_end_wrapped].copy()
+                    captured_data = stream_buffer[g_start_wrapped:g_end_wrapped].copy()
                 else:
-                    recorded_data = np.concatenate([
+                    captured_data = np.concatenate([
                         stream_buffer[g_start_wrapped:], 
                         stream_buffer[:g_end_wrapped]
                     ])
                 
-                # Save to disk
-                os.makedirs('user', exist_ok=True)
-                timestamp = int(time.time())
-                filepath = f'user/{gesture_name}_{timestamp}.npy'
-                np.save(filepath, recorded_data)
+                # Paylaşılan belleği (calib_buffer) güncelle
+                save_len = min(len(captured_data), len(calib_buffer))
+                calib_buffer[:save_len] = captured_data[:save_len]
+                calib_index.value = save_len 
                 
-                print(f"✅ CALIBRATION COMPLETE!")
-                print(f"   Saved: {filepath}")
-                print(f"   Samples: {len(recorded_data)}")
-                print(f"   Duration: {len(recorded_data)/SAMPLINGHZ:.2f}s")
+                # Diske kaydet
+                os.makedirs('regennewcb', exist_ok=True)
+                filepath = f'regennewcb/{gesture_name}_{int(time.time())}.npy'
+                np.save(filepath, captured_data)
+                
+                print(f"\n✅ KALİBRASYON BAŞARILI!")
+                print(f"   ↳ Kaydedilen: {save_len} sample") 
+                print(f"   ↳ Süre: {save_len/SAMPLINGHZ:.2f} sn")
+                print(f"   ↳ Dosya: {filepath}")
                 
                 return True
-            
-            # Safety: Check for buffer overflow
-            elif (current_idx - gesture_start_idx) >= STREAM_BUFFER_SIZE:
-                print("⚠️  Buffer overflow: Gesture too long, resetting. Try again...")
-                state = "READY"
-                gesture_start_idx = None
         
         last_processed_idx = current_idx
 
