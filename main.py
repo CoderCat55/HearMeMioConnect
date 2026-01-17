@@ -17,7 +17,7 @@ rest_window_samples = 20  #note if you are gonna change this change it also in c
 gesture_window_samples = 200
 
 STREAM_BUFFER_SIZE = 1000  # ~5 seconds at SAMPLINGHZ
-CALIBRATION_BUFFER_SIZE = 250  # ~3 seconds at SAMPLINGHZ
+CALIBRATION_BUFFER_SIZE = 600  # ~3 seconds at SAMPLINGHZ
 
 CALIBRATION_DURATION = 3  
 CLASSIFICATION_DURATION = 3 
@@ -261,6 +261,18 @@ def GeneralCalibrate(gesture_name, calib_buffer, calib_index, recording_flag, re
     if recorded_data is None or len(recorded_data) == 0:
         print("ERROR: No data was recorded! Check if Myos are connected.")
         return
+    
+    # Add to classifier
+    #classifier.add_calibration_sample(gesture_name, recorded_data)
+    
+    # Save to disk
+    import os
+    os.makedirs('user', exist_ok=True)
+    timestamp = int(time.time())
+    np.save(f'user/{gesture_name}_{timestamp}.npy', recorded_data)
+    
+    print(f"Calibration complete! Saved {len(recorded_data)} samples")
+"""Calibrate funcitoan will be dealt with later"""
 
 def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, result_queue, STREAM_BUFFER_SIZE, samplingrate):
     """Process 2: Runs classification using Rest-to-Rest strategy"""
@@ -525,7 +537,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
                 print("ERROR: Data acquisition not running. Use 'connect' first.")
             else:
                 gesture_name = input("Which gesture would you like to calibrate? ")
-                success = GeneralCalibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, recording_flag, recording_gesture)
+                success = GeneralCalibrate(gesture_name, calib_buffer, calib_index, recording_flag, recording_gesture)
                 if success:
                     print("\n Tip: Run 'tr' to retrain the personal model with new data")
        
