@@ -436,7 +436,7 @@ def TrainPersonal():
     import os
     
     print("\n=== Training Personal Model (ptr) ===")
-    user_folder = 'regennewcb'
+    user_folder = 'lastcb'
     
     if not os.path.exists(user_folder):
         print(f"❌ Error: '{user_folder}' folder not found. Please calibrate first (cb).")

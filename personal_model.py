@@ -51,7 +51,42 @@ class PersonalModel:
             
         return np.array(features)
     
+    "without split"
     def train(self, gesture_data):
+        X_train, y_train = [], [] # Removed X_test, y_test
+
+        for label, samples in gesture_data.items():
+            # CHANGED: No more splitting. We use all samples for training.
+            train_samples = samples 
+            
+            # Create windows for training data
+            for sample in train_samples:
+                # Loop through the sample with overlap
+                for i in range(0, len(sample) - self.samples_per_window + 1, self.stride):
+                    # Extract features and append to training set
+                    features = self.extract_features(sample[i:i + self.samples_per_window])
+                    X_train.append(features)
+                    y_train.append(label)
+                
+        if len(X_train) == 0:
+            print("Training data is empty! Check window size or recording length.")
+            return
+
+        # Create training set
+        # Scale the data
+        X_train_scaled = self.scaler.fit_transform(np.array(X_train))
+        
+        # Apply PCA
+        # Note: If data is extremely small, PCA might complain.
+        X_train_pca = self.pca.fit_transform(X_train_scaled)
+        
+        # Fit the KNN model
+        self.model.fit(X_train_pca, y_train)
+        
+        print(f"Personal Model trained on {len(X_train)} windows using 100% of available data.")
+
+    """def train(self, gesture_data):
+
         X_train, y_train, X_test, y_test = [], [], [], []
     
         for label, samples in gesture_data.items():
@@ -90,7 +125,8 @@ class PersonalModel:
             y_pred = self.model.predict(X_test_pca)
             acc = accuracy_score(y_test, y_pred)
             print(f"Personal Model Accuracy: %{acc * 100:.2f}")
-
+"""
+    
     def classify(self, features):
         """
         Classify a feature vector
