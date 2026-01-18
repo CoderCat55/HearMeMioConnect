@@ -180,7 +180,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
         elif state == "RECORDING":
             if is_rest:
                 # Hareket bitti
-                gesture_end_idx = current_idx
+                gesture_end_idx = current_idx - REST_WINDOW_SIZE
                 duration = gesture_end_idx - gesture_start_idx
                 
                 if duration < MIN_GESTURE_SAMPLES:
@@ -206,8 +206,8 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 calib_index.value = save_len 
                 
                 # Diske kaydet
-                os.makedirs('regennewcb', exist_ok=True)
-                filepath = f'regennewcb/{gesture_name}_{int(time.time())}.npy'
+                os.makedirs('lastcb', exist_ok=True)
+                filepath = f'lastcb/{gesture_name}_{int(time.time())}.npy'
                 np.save(filepath, captured_data)
                 
                 print(f"\n✅ KALİBRASYON BAŞARILI!")

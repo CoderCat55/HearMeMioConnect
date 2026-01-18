@@ -34,9 +34,9 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 # Constants
-main_folder_path = "regennewcb"  # Set your main folder path here
+main_folder_path = "lastcb"  # Set your main folder path here
 subfolders_list = [""]
-plots_folder = "new_plots_p3"  # Set your plots output folder here
+plots_folder = "lastcb_plots"  # Set your plots output folder here
 Xgrid_size = 5
 Ygrid_size = 100
 
