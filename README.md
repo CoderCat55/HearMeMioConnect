@@ -1,7 +1,7 @@
 # ToDo
-I want to add another model "personal model" which only be trained on the data inside 'user' folder.
-the gestures would be recorded from rest position to rest pos,ition just like the classificaiton works = calibrate function will do that instead of saving for 3 seconds of savings.
-Also webserver and commsnd function would be able to control starting ond stoppiing of the personal model as well as the general model. Results of the personal model will be broadcasted the same way general gesture model does in order to maintain minimal changes and avoid extra code
+setcw endpoint after calibration is done it should show some feedback on how much gestures have been saved inside gesture_sample_amount variable.
+Ptrain endpoint should trigger def TrainPersonal() function from main.py
+Keep the current structure.
 
 DO NOT FORGET THE RULES
 

@@ -7,6 +7,7 @@ comminicates with json
 
 from flask import Flask, jsonify, request
 import numpy as np
+import glob
 
 app = Flask(__name__)
 
@@ -328,6 +329,29 @@ def train():
             "message": "Training failed. Check logs."
         }), 500
 
+@app.route('/Ptrain') 
+def Personaltrain():
+    """Train the personal model"""
+    if _system is None:
+        return jsonify({
+            "status": "error",
+            "message": "System not initialized"
+        }), 500
+    
+    print("Training personal model...")
+    success = _system.train_personal_model()
+    
+    if success:
+        return jsonify({
+            "status": "success",
+            "message": "Personal model trained successfully"
+        })
+    else:
+        return jsonify({
+            "status": "error",
+            "message": "Personal training failed. Check logs for details."
+        }), 500
+    
 @app.route('/setcw')
 def setcw():
     """Save calibration sample for a gesture (using rest-to-rest detection)"""
@@ -359,10 +383,17 @@ def setcw():
     # Note: calibrate() now uses rest-to-rest detection (30s timeout)
     success = _system.calibrate(gesture_name)
     
+    #
     if success:
+    # Count samples for THIS specific gesture
+        matching_files = glob.glob(f'lastcb/{gesture_name}_*.npy')
+        sample_count = len(matching_files)
+        
         return jsonify({
             "status": "success",
             "message": f"Calibration sample saved for '{gesture_name}' using rest-to-rest detection",
+            "gesture_name": gesture_name,
+            "total_samples": sample_count,
             "method": "rest_to_rest",
             "nextcal": "ok"
         })
@@ -373,7 +404,57 @@ def setcw():
             "nextcal": "notok"
         }), 500
 
-
+@app.route('/Gsetcw')
+def Generalsetcw():
+    """Save calibration sample for general model (timed recording)"""
+    if _system is None:
+        return jsonify({
+            "status": "error",
+            "message": "System not initialized"
+        }), 500
+    
+    # Get gesture name/number from query params
+    value = request.args.get('value', type=int)
+    gesture_name = request.args.get('name', type=str)
+    
+    # Support both numeric IDs and string names
+    if gesture_name is None and value is not None:
+        gesture_name = f"gesture_{value}"
+    elif gesture_name is None:
+        return jsonify({
+            "status": "error",
+            "message": "Missing 'value' or 'name' parameter"
+        }), 400
+    
+    if not _system.is_data_acquisition_running():
+        return jsonify({
+            "status": "error",
+            "message": "Data acquisition not running. Call /connect first."
+        }), 400
+    
+    success = _system.general_calibrate(gesture_name)
+    
+    if success:
+        # Count samples in 'user' folder (general calibration saves here)
+        generalcalibrationfolder="user"
+        matching_files = glob.glob(f'{generalcalibrationfolder}/{gesture_name}_*.npy')
+        sample_count = len(matching_files)
+        
+        return jsonify({
+            "status": "success",
+            "message": f"General calibration sample saved for '{gesture_name}'",
+            "gesture_name": gesture_name,
+            "total_samples": sample_count,
+            "method": "timed_recording",
+            "nextcal": "ok"
+        })
+    else:
+        return jsonify({
+            "status": "error",
+            "message": "General calibration failed",
+            "nextcal": "notok"
+        }), 500
+    
 @app.route('/status')
 def status():
     """Get system status"""
@@ -393,6 +474,7 @@ def status():
         _system.gesture_model.model is not None
     )
     personal_model_trained = (
+        hasattr(_system, 'Pgesture_model') and
         _system.Pgesture_model is not None and 
         _system.Pgesture_model.model is not None
     )

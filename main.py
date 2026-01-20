@@ -265,7 +265,6 @@ def GeneralCalibrate(gesture_name, calib_buffer, calib_index, recording_flag, re
     np.save(f'user/{gesture_name}_{timestamp}.npy', recorded_data)
     
     print(f"Calibration complete! Saved {len(recorded_data)} samples")
-"""Calibrate funcitoan will be dealt with later"""
 
 def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, result_queue, STREAM_BUFFER_SIZE, samplingrate):
     """Process 2: Runs classification using Rest-to-Rest strategy"""
@@ -299,8 +298,7 @@ def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, re
     if not Pgesture_model.load_model('Pgesture_model.pkl'):
         result_queue.put("ERROR: Could not load Pgesture_model.pkl (personal model not trained yet)")
         Pgesture_model = None  # Mark as unavailable
-        return
-    
+        # No return Continue running - general model still works!
     result_queue.put("✓ Classification process ready! (Waiting for Non-Rest to Rest sequence)")
     
     last_processed_idx = 0
@@ -517,7 +515,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             success = TrainPersonal()
             if success:
                 system._load_models() # Modeli güncel halini belleğe al
-        case "cb":  #calibrate
+        case "cb":  #calibrate #personal calibation
             if not system.is_data_acquisition_running():
                 print("ERROR: Data acquisition not running. Use 'connect' first.")
             else:
@@ -525,7 +523,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
                 success = Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, recording_flag, recording_gesture)
                 if success:
                     print("\n Tip: Run 'tr' to retrain the personal model with new data")
-        case "gcb":  #calibrate
+        case "gcb":  #calibrate #general calibration
             if not system.is_data_acquisition_running():
                 print("ERROR: Data acquisition not running. Use 'connect' first.")
             else:
@@ -661,7 +659,7 @@ class GestureSystem:
                 window_size_samples=gesture_window_samples, 
                 sampling_rate=SAMPLINGHZ)
             if os.path.exists('Pgesture_model.pkl'):
-                self.gesture_model.load_model('Pgesture_model.pkl')
+                self.Pgesture_model.load_model('Pgesture_model.pkl')
                 
         except Exception as e:
             print(f"Note: Models not loaded yet ({e})")
@@ -789,7 +787,24 @@ class GestureSystem:
         except Exception as e:
             print(f"Calibration failed: {e}")
             return False
-    
+    def general_calibrate(self, gesture_name):
+        """General calibration using timed recording"""
+        if not self.is_data_acquisition_running():
+            print("ERROR: Data acquisition not running")
+            return False
+        
+        try:
+            success = GeneralCalibrate(
+                gesture_name,
+                self.calib_buffer, 
+                self.calib_index,
+                self.recording_flag, 
+                self.recording_gesture
+            )
+            return success
+        except Exception as e:
+            print(f"General calibration failed: {e}")
+            return False
     def train_models(self):
         """Train both models"""
         try:
@@ -799,6 +814,16 @@ class GestureSystem:
             return success
         except Exception as e:
             print(f"Training failed: {e}")
+            return False
+    def train_personal_model(self):
+        """Train only the personal model"""
+        try:
+            success = TrainPersonal()
+            if success:
+                self._load_models()  # Reload models after training
+            return success
+        except Exception as e:
+            print(f"Personal training failed: {e}")
             return False
     
     def cleanup(self):
