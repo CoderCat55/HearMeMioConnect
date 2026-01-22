@@ -434,7 +434,7 @@ def TrainPersonal():
     import os
     
     print("\n=== Training Personal Model (ptr) ===")
-    user_folder = 'lastcb'
+    user_folder = 'user'
     
     if not os.path.exists(user_folder):
         print(f"❌ Error: '{user_folder}' folder not found. Please calibrate first (cb).")
@@ -738,6 +738,7 @@ class GestureSystem:
     def stop_classification(self):
         """Disable classification (set flag to 0)"""
         self.is_running_flag.value = 0
+        self.Pis_running_flag.value = 0
         print("✓ Classification disabled")
     
     def is_classification_running(self):
@@ -751,6 +752,7 @@ class GestureSystem:
 
     def stop_personal_classification(self):
         """Disable personal classification (set Pis_running_flag to 0)"""
+        self.is_running_flag.value = 0
         self.Pis_running_flag.value = 0
         print("✓ Personal classification disabled")
 
