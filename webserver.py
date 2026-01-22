@@ -488,7 +488,33 @@ def set_personal_folder():
         "folder": folder,
         "exists": True  # Folder is created automatically
     })
-  
+
+@app.route('/calibration_status')
+def calibration_status():
+    """Get current calibration status messages"""
+    if _system is None:
+        return jsonify({
+            "status": "error",
+            "message": "System not initialized"
+        }), 500
+    
+    # Thread-safe read
+    with _system.calibration_lock:
+        messages = _system.calibration_status_messages.copy()
+    
+    if not messages:
+        return jsonify({
+            "status": "no_calibration",
+            "message": "No calibration in progress or completed recently",
+            "messages": []
+        })
+    
+    return jsonify({
+        "status": "success",
+        "messages": messages,
+        "count": len(messages)
+    })
+
 @app.route('/status')
 def status():
     """Get system status"""

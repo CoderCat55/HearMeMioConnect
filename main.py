@@ -8,6 +8,7 @@ from gesture_model import GestureModel
 from personal_model import PersonalModel
 import os
 import threading
+import queue
 
 
 # Constants
@@ -100,8 +101,9 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             part2 = stream_buffer[:current_idx_wrapped]  # From beginning to current
             return np.concatenate([part1, part2])
 
+
 def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, 
-              recording_flag, recording_gesture,user_folder):
+              recording_flag, recording_gesture,user_folder, system=None):
     """
     Hassas Rest-to-Rest kalibrasyonu: Sadece REST_THRESHOLD (stabilizasyon) korumalı, 
     hareket algılandığı an gecikmesiz kayda başlayan sürüm.
@@ -131,12 +133,14 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
 
     print(f"\n{'='*50}")
     print(f"KALİBRASYON: {gesture_name}")
+    system._calibration_log(f"Calibration: {gesture_name}")
     print(f"{'='*50}")
     print("Sistem stabilize ediliyor, lütfen elinizi DİNLENME konumunda tutun...")
-
+    system._calibration_log(f"System stablizing please keep your hand at 'rest' position")
     while True:
         if time.time() - start_time > timeout:
             print("\n❌ ZAMAN AŞIMI: Kalibrasyon iptal edildi.")
+            system._calibration_log(f"Timeout,Cancel calibraiton")
             return False
             
         current_idx = stream_index.value
@@ -167,6 +171,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                     state = "READY"
                     rest_counter = 0
                     print("✓ HAZIR! Hareketi yaptığınız an kayıt başlayacaktır...")
+                    system._calibration_log("Ready. The recording will start when you perform the gesture")
             else:
                 rest_counter = 0
 
@@ -176,6 +181,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 gesture_start_idx = current_idx - REST_WINDOW_SIZE
                 state = "RECORDING"
                 print(f"⚡ Hareket algılandı, kaydediliyor...")
+                system._calibration_log("Movement detected. Saving calibration....")
 
         elif state == "RECORDING":
             if is_rest:
@@ -185,6 +191,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 
                 if duration < MIN_GESTURE_SAMPLES:
                     print(f"⚠️ Hareket çok kısa ({duration} sample), lütfen tekrar deneyin...")
+                    system._calibration_log(f"Gesture too short ({duration} sample), please try again...")
                     state = "READY"
                     continue
                 
@@ -210,11 +217,8 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 filepath = f'{user_folder}/{gesture_name}_{int(time.time())}.npy'
                 np.save(filepath, captured_data)
                 
-                print(f"\n✅ KALİBRASYON BAŞARILI!")
-                print(f"   ↳ Kaydedilen: {save_len} sample") 
-                print(f"   ↳ Süre: {save_len/SAMPLINGHZ:.2f} sn")
-                print(f"   ↳ Dosya: {filepath}")
-                
+                print(f"\nKALİBRASYON BAŞARILI! Kaydedilen: {save_len} sample , Süre: {save_len/SAMPLINGHZ:.2f} sn , Dosya: {filepath}")
+                system._calibration_log(f"saved {save_len} sample, duration Süre: {save_len/SAMPLINGHZ:.2f} sn ,filename:{filepath} ")
                 return True
         
         last_processed_idx = current_idx
@@ -598,7 +602,8 @@ class GestureSystem:
         self.data_process = None
         self.classify_process = None
         self.monitor_thread = None
-        
+        self.calibration_status_messages = []  # Current session messages
+        self.calibration_lock = threading.Lock()
         # Models (for status checking)
         self.rest_model = None
         self.gesture_model = None
@@ -795,7 +800,8 @@ class GestureSystem:
             self.calib_index,
             self.recording_flag, 
             self.recording_gesture,
-            self.current_user_folder)
+            self.current_user_folder,
+            system=self)
             return success
         except Exception as e:
             print(f"Calibration failed: {e}")
@@ -838,7 +844,26 @@ class GestureSystem:
         except Exception as e:
             print(f"Personal training failed: {e}")
             return False
-    
+    def _calibration_log(self, message):
+        """Log calibration message to status list (thread-safe)"""
+        print(message)  # Keep console output
+        
+        with self.calibration_lock:
+            import time
+            
+            # If this is a new calibration starting, clear old messages
+            if "KALĠBRASYON:" in message or "KALİBRASYON:" in message:
+                self.calibration_status_messages.clear()
+            
+            # Add new message with timestamp
+            self.calibration_status_messages.append({
+                'message': message,
+                'timestamp': time.time()
+            })
+            
+            # Safety limit: keep only last 100 messages
+            if len(self.calibration_status_messages) > 100:
+                self.calibration_status_messages.pop(0)
     def cleanup(self):
         """Clean up all resources"""
         print("Cleaning up...")
