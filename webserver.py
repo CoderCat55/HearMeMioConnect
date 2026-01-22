@@ -454,7 +454,41 @@ def Generalsetcw():
             "message": "General calibration failed",
             "nextcal": "notok"
         }), 500
+
+@app.route('/pf')
+def set_personal_folder():
+    """Set personal folder for user-specific training and calibration"""
+    if _system is None:
+        return jsonify({
+            "status": "error",
+            "message": "System not initialized"
+        }), 500
     
+    name = request.args.get('name', type=str)
+    
+    if not name:
+        return jsonify({
+            "status": "error",
+            "message": "Missing 'name' parameter"
+        }), 400
+    
+    # Validate name (no special characters for safety)
+    import re
+    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+        return jsonify({
+            "status": "error",
+            "message": "Invalid name. Use only letters, numbers, underscore and dash."
+        }), 400
+    
+    folder = _system.set_personal_folder(name)
+    
+    return jsonify({
+        "status": "success",
+        "message": f"Personal folder set to '{folder}'",
+        "folder": folder,
+        "exists": True  # Folder is created automatically
+    })
+  
 @app.route('/status')
 def status():
     """Get system status"""
@@ -501,6 +535,7 @@ def status():
             "data_acquisition_running": _system.is_data_acquisition_running(),
             "classification_running": _system.is_classification_running(),
             "active_model": active_model,
+            "current_personal_folder": _system.current_user_folder,
             "rest_model_trained": rest_model_trained,
             "gesture_model_trained": gesture_model_trained,
             "personal_model_trained": personal_model_trained,

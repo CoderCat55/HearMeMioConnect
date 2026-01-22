@@ -1,6 +1,7 @@
 # ToDo
-setcw endpoint after calibration is done it should show some feedback on how much gestures have been saved inside gesture_sample_amount variable.
-Ptrain endpoint should trigger def TrainPersonal() function from main.py
+Add a endpoint called /pf which can take a "name" value
+Aim of this endpoint is to determine the foldername for personal training and calibrate functions in main.py
+if such folder does not exist create the folder if it already exists use the folder
 Keep the current structure.
 
 DO NOT FORGET THE RULES

@@ -101,7 +101,7 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
             return np.concatenate([part1, part2])
 
 def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, 
-              recording_flag, recording_gesture):
+              recording_flag, recording_gesture,user_folder):
     """
     Hassas Rest-to-Rest kalibrasyonu: Sadece REST_THRESHOLD (stabilizasyon) korumalı, 
     hareket algılandığı an gecikmesiz kayda başlayan sürüm.
@@ -206,8 +206,8 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 calib_index.value = save_len 
                 
                 # Diske kaydet
-                os.makedirs('lastcb', exist_ok=True)
-                filepath = f'lastcb/{gesture_name}_{int(time.time())}.npy'
+                os.makedirs(user_folder, exist_ok=True)
+                filepath = f'{user_folder}/{gesture_name}_{int(time.time())}.npy'
                 np.save(filepath, captured_data)
                 
                 print(f"\n✅ KALİBRASYON BAŞARILI!")
@@ -428,13 +428,11 @@ def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, re
 
         last_processed_idx = current_idx
 
-def TrainPersonal():
+def TrainPersonal(user_folder):
     """Sadece 'user' klasöründeki verilerle PersonalModel'i eğitir"""
     import glob
     import os
-    
-    print("\n=== Training Personal Model (ptr) ===")
-    user_folder = 'user'
+    print(f"\n=== Training Personal Model (ptr) from '{user_folder}' ===")
     
     if not os.path.exists(user_folder):
         print(f"❌ Error: '{user_folder}' folder not found. Please calibrate first (cb).")
@@ -512,7 +510,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             Train()
         case "ptr":
             print("Now running personal train function...")
-            success = TrainPersonal()
+            success = TrainPersonal(system.current_user_folder)
             if success:
                 system._load_models() # Modeli güncel halini belleğe al
         case "cb":  #calibrate #personal calibation
@@ -520,7 +518,7 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
                 print("ERROR: Data acquisition not running. Use 'connect' first.")
             else:
                 gesture_name = input("Which gesture would you like to calibrate? ")
-                success = Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, recording_flag, recording_gesture)
+                success = Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, recording_flag, recording_gesture,system.current_user_folder)
                 if success:
                     print("\n Tip: Run 'tr' to retrain the personal model with new data")
         case "gcb":  #calibrate #general calibration
@@ -560,8 +558,11 @@ def Command(stream_buffer, stream_index, calib_buffer, calib_index,
             print(f"Classification running: {is_running_flag.value}")
             if stream_index.value > 0:
                 print(f"Recent data sample: {stream_buffer[stream_index.value % STREAM_BUFFER_SIZE][:8]}")
+        case "pf":
+            folder_name = input("Enter user/folder name: ")
+            system.set_personal_folder(folder_name)
         case _:
-            print("Invalid command! Use: connect, disconnect, tr, cb, startcf, stopcf, debug")
+            print("Invalid command! Use: connect, disconnect, tr, ptr, cb, gcb, startcf, stopcf, startPcf, pf, debug")
 
 def monitor_classification_results(result_queue):
     """Read from queue and print to terminal"""
@@ -663,6 +664,16 @@ class GestureSystem:
                 
         except Exception as e:
             print(f"Note: Models not loaded yet ({e})")
+        self.current_user_folder = 'lastcb'  # Default folder
+    
+    def set_personal_folder(self, name):
+        """Set the folder for personal training/calibration"""
+        import os
+        folder_name = name  # pf = personal folder
+        os.makedirs(folder_name, exist_ok=True)
+        self.current_user_folder = folder_name
+        print(f"✓ Personal folder set to: {folder_name}")
+        return folder_name
     
     def start_data_acquisition(self):
         """Start the data acquisition process"""
@@ -775,7 +786,6 @@ class GestureSystem:
         if not self.is_data_acquisition_running():
             print("ERROR: Data acquisition not running")
             return False
-        
         try:
             success = Calibrate(
             gesture_name,
@@ -784,7 +794,8 @@ class GestureSystem:
             self.calib_buffer, 
             self.calib_index,
             self.recording_flag, 
-            self.recording_gesture)
+            self.recording_gesture,
+            self.current_user_folder)
             return success
         except Exception as e:
             print(f"Calibration failed: {e}")
@@ -820,7 +831,7 @@ class GestureSystem:
     def train_personal_model(self):
         """Train only the personal model"""
         try:
-            success = TrainPersonal()
+            success = TrainPersonal(self.current_user_folder)
             if success:
                 self._load_models()  # Reload models after training
             return success
@@ -887,10 +898,15 @@ if __name__ == "__main__":
     print("=" * 50)
     
     print("\nSystem ready! Available commands:")
-    print("  tr       = train models")
-    print("  cb       = calibrate gesture")
-    print("  startcf  = start classification")
+    print("  connect  = connect to Myo devices")
+    print("  tr       = train general models")
+    print("  ptr      = train personal model")
+    print("  cb       = calibrate gesture (personal)")
+    print("  gcb      = calibrate gesture (general)")
+    print("  startcf  = start general classification")
     print("  stopcf   = stop classification")
+    print("  startPcf = start personal classification")
+    print("  pf       = set personal folder")
     print("  debug    = show debug info")
     print()
     
