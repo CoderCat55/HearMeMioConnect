@@ -1,19 +1,5 @@
 # ToDo
-I want this to be seen in the webserver
-==================================================
-KALİBRASYON: Hello
-==================================================
-Sistem stabilize ediliyor, lütfen elinizi DİNLENME konumunda tutun...
-✓ HAZIR! Hareketi yaptığınız an kayıt başlayacaktır...
-⚡ Hareket algılandı, kaydediliyor...
-
-✅ KALİBRASYON BAŞARILI!
-   ↳ Kaydedilen: 40 sample
-   ↳ Süre: 0.80 sn
-   ↳ Dosya: calisiyormu/Hello_1769079311.npy
-
-add a calibration_status endpoint which would show this messages
-also you might need to add a shared variable for this
+modify calibration_status endpoint should show these kind of messages system._calibration_log("Movement detected. Saving calibration....")
 Keep the current structure.
 
 DO NOT FORGET THE RULES

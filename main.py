@@ -602,7 +602,7 @@ class GestureSystem:
         self.data_process = None
         self.classify_process = None
         self.monitor_thread = None
-        self.calibration_status_messages = []  # Current session messages
+        self.calibration_status_messages = None  # Current session messages
         self.calibration_lock = threading.Lock()
         # Models (for status checking)
         self.rest_model = None
@@ -845,25 +845,15 @@ class GestureSystem:
             print(f"Personal training failed: {e}")
             return False
     def _calibration_log(self, message):
-        """Log calibration message to status list (thread-safe)"""
+        """Log calibration message"""
         print(message)  # Keep console output
         
         with self.calibration_lock:
             import time
-            
-            # If this is a new calibration starting, clear old messages
-            if "KALĠBRASYON:" in message or "KALİBRASYON:" in message:
-                self.calibration_status_messages.clear()
-            
-            # Add new message with timestamp
-            self.calibration_status_messages.append({
+            self.current_calibration_message = {
                 'message': message,
                 'timestamp': time.time()
-            })
-            
-            # Safety limit: keep only last 100 messages
-            if len(self.calibration_status_messages) > 100:
-                self.calibration_status_messages.pop(0)
+            }
     def cleanup(self):
         """Clean up all resources"""
         print("Cleaning up...")
