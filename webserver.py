@@ -384,17 +384,13 @@ def setcw():
     success = _system.calibrate(gesture_name)
     
     #
-    if success:
+    if success is not False:
     # Count samples for THIS specific gesture
-        matching_files = glob.glob(f'lastcb/{gesture_name}_*.npy')
-        sample_count = len(matching_files)
-        
         return jsonify({
             "status": "success",
-            "message": f"Calibration sample saved for '{gesture_name}' using rest-to-rest detection",
+            "message": f"Sample saved. Total for '{gesture_name}': {result}",
             "gesture_name": gesture_name,
-            "total_samples": sample_count,
-            "method": "rest_to_rest",
+            "total_samples": result, # Use the count returned by the function
             "nextcal": "ok"
         })
     else:
@@ -403,6 +399,24 @@ def setcw():
             "message": "Calibration failed or timed out (30s limit)",
             "nextcal": "notok"
         }), 500
+
+@app.route('/deletecw')
+def deletecw():
+    """Delete all npy files starting with 'name' in current calibration folder"""
+    if _system is None:
+        return jsonify({"status": "error", "message": "System not initialized"}), 500
+    
+    name = request.args.get('name', type=str)
+    if not name:
+        return jsonify({"status": "error", "message": "Missing 'name' parameter"}), 400
+    
+    deleted_count = _system.delete_gesture_samples(name)
+    
+    return jsonify({
+        "status": "success",
+        "message": f"Deleted {deleted_count} samples for '{name}'",
+        "deleted_count": deleted_count
+    })
 
 @app.route('/Gsetcw')
 def Generalsetcw():

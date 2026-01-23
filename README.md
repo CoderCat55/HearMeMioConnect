@@ -1,5 +1,7 @@
 # ToDo
-modify calibration_status endpoint should show these kind of messages system._calibration_log("Movement detected. Saving calibration....")
+* modify calibrate function to send how many npy files have been saved in current calibration folder that starts with gesture name
+* Add a /deletecw endpoint which can take "name" as a value (string). This endpoint will delete all the npy files which starts with the value of "name" inside the current calibartion folder 
+
 Keep the current structure.
 
 DO NOT FORGET THE RULES

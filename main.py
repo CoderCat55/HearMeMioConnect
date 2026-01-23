@@ -9,6 +9,7 @@ from personal_model import PersonalModel
 import os
 import threading
 import queue
+import glob
 
 
 # Constants
@@ -217,9 +218,13 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 filepath = f'{user_folder}/{gesture_name}_{int(time.time())}.npy'
                 np.save(filepath, captured_data)
                 
-                print(f"\nKALİBRASYON BAŞARILI! Kaydedilen: {save_len} sample , Süre: {save_len/SAMPLINGHZ:.2f} sn , Dosya: {filepath}")
-                system._calibration_log(f"saved {save_len} sample, duration Süre: {save_len/SAMPLINGHZ:.2f} sn ,filename:{filepath} ")
-                return True
+                # Calculate how many files now exist for this gesture
+                matching_files = glob.glob(os.path.join(user_folder, f"{gesture_name}_*.npy"))
+                sample_count = len(matching_files)
+
+                print(f"\nKALİBRASYON BAŞARILI! Kaydedilen: {save_len} sample...")
+                system._calibration_log(f"Saved sample #{sample_count} for {gesture_name}. Total: {sample_count}")
+                return sample_count # Return the count instead of True
         
         last_processed_idx = current_idx
 
@@ -806,6 +811,23 @@ class GestureSystem:
         except Exception as e:
             print(f"Calibration failed: {e}")
             return False
+    
+    def delete_gesture_samples(self, gesture_name):
+        """Deletes all .npy files for a specific gesture in the current folder"""
+        import glob
+        import os
+        path_pattern = os.path.join(self.current_user_folder, f"{gesture_name}_*.npy")
+        files_to_delete = glob.glob(path_pattern)
+        
+        deleted_count = 0
+        for f in files_to_delete:
+            try:
+                os.remove(f)
+                deleted_count += 1
+            except Exception as e:
+                print(f"Error deleting {f}: {e}")
+                
+        return deleted_count
     def general_calibrate(self, gesture_name):
         """General calibration using timed recording"""
         if not self.is_data_acquisition_running():
