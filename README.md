@@ -1,6 +1,7 @@
 # ToDo
-Problem:
-I have set pf via webserver (and we are sure it saves calibration data to there)and hit train but it still trains the data on lastcb folder or doesnt update the pkl file
+I have calibration_status endpoint to inform the user while making calibration. Also setcw endpoint. 
+I want to acess setcw endpoint to give command for calibration and also show user instructions like rest is detected you may perform the gesture,gesture is done,there is 4 files for this gesture etc.
+My current implementation with calibration status and setcw endpoint looks a bit messy. Lets brain storm I want the least change as possible.
 
 DO NOT FORGET THE RULES
 
