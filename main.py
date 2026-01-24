@@ -223,7 +223,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 sample_count = len(matching_files)
 
                 print(f"\nKALİBRASYON BAŞARILI! Kaydedilen: {save_len} sample...")
-            #   system._calibration_log(f"Saved sample #{sample_count} for {gesture_name}. Total: {sample_count}")
+                system._calibration_log(f"Saved sample #{sample_count} for {gesture_name}. Total: {sample_count}")
                 return sample_count # Return the count instead of True
         
         last_processed_idx = current_idx
