@@ -1,7 +1,5 @@
 # ToDo
-I have calibration_status endpoint to inform the user while making calibration. Also setcw endpoint. 
-I want to acess setcw endpoint to give command for calibration and also show user instructions like rest is detected you may perform the gesture,gesture is done,there is 4 files for this gesture etc.
-My current implementation with calibration status and setcw endpoint looks a bit messy. Lets brain storm I want the least change as possible.
+personal train function should first delete the Pgesturemodel.pkl then continue as it was.
 
 DO NOT FORGET THE RULES
 
