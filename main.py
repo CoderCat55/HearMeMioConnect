@@ -10,7 +10,7 @@ import os
 import threading
 import queue
 import glob
-
+import sys
 
 # Constants
 SAMPLINGHZ= 50
@@ -618,6 +618,17 @@ class GestureSystem:
     
     def _initialize_shared_memory(self):
         """Create all shared memory structures"""
+        # Define unique names for your segments
+        shm_name = "hearme_stream"
+        calib_name = "hearme_calib"
+        # Clean up existing segments with these names if they exist from a previous crash
+        for name in [shm_name, calib_name]:
+            try:
+                temp_shm = shared_memory.SharedMemory(name=name)
+                temp_shm.close()
+                temp_shm.unlink()
+            except FileNotFoundError:
+                pass
         # Stream buffer
         self.shm_stream = shared_memory.SharedMemory(
             create=True, 
@@ -933,35 +944,43 @@ if __name__ == "__main__":
     webserver_thread.start()
     print(f"✓ Webserver running on http://0.0.0.0:5002")
     print("=" * 50)
-    
-    print("\nSystem ready! Available commands:")
-    print("  connect  = connect to Myo devices")
-    print("  tr       = train general models")
-    print("  ptr      = train personal model")
-    print("  cb       = calibrate gesture (personal)")
-    print("  gcb      = calibrate gesture (general)")
-    print("  startcf  = start general classification")
-    print("  stopcf   = stop classification")
-    print("  startPcf = start personal classification")
-    print("  pf       = set personal folder")
-    print("  debug    = show debug info")
-    print()
-    
-    # Command loop
-    try:
-        while True:
-            Command(
-                system.stream_buffer, 
-                system.stream_index, 
-                system.calib_buffer, 
-                system.calib_index,
-                system.recording_flag, 
-                system.recording_gesture,
-                system.is_running_flag,
-                system.Pis_running_flag,
-                system
-            )
-    except KeyboardInterrupt:
-        print("\n\nShutting down...")
-        system.cleanup()
-        print("Goodbye!")
+    if sys.stdin.isatty():
+        print("\nSystem ready! Available commands:")
+        print("  connect  = connect to Myo devices")
+        print("  tr       = train general models")
+        print("  ptr      = train personal model")
+        print("  cb       = calibrate gesture (personal)")
+        print("  gcb      = calibrate gesture (general)")
+        print("  startcf  = start general classification")
+        print("  stopcf   = stop classification")
+        print("  startPcf = start personal classification")
+        print("  pf       = set personal folder")
+        print("  debug    = show debug info")
+        print()
+        
+        # Command loop
+        try:
+            while True:
+                Command(
+                    system.stream_buffer, 
+                    system.stream_index, 
+                    system.calib_buffer, 
+                    system.calib_index,
+                    system.recording_flag, 
+                    system.recording_gesture,
+                    system.is_running_flag,
+                    system.Pis_running_flag,
+                    system
+                )
+        except KeyboardInterrupt:
+            print("\n\nShutting down...")
+            system.cleanup()
+            print("Goodbye!")
+    else:
+        print("Running in Background (Service Mode). Webserver active.")
+        # Keep the main thread alive so the background processes don't die
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            system.cleanup()
