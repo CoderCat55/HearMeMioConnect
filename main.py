@@ -612,7 +612,6 @@ class GestureSystem:
         # Models (for status checking)
         self.rest_model = None
         self.gesture_model = None
-        
         self._initialize_shared_memory()
         self._load_models()
     
@@ -632,24 +631,28 @@ class GestureSystem:
         # Stream buffer
         self.shm_stream = shared_memory.SharedMemory(
             create=True, 
-            size=STREAM_BUFFER_SIZE * 34 * 4
+            size=STREAM_BUFFER_SIZE * 34 * 4,
+            name=shm_name
         )
         self.stream_buffer = np.ndarray(
             (STREAM_BUFFER_SIZE, 34), 
             dtype=np.float32, 
-            buffer=self.shm_stream.buf
+            buffer=self.shm_stream.buf,
+            
         )
         self.stream_buffer.fill(0)
         
         # Calibration buffer
         self.shm_calib = shared_memory.SharedMemory(
             create=True, 
-            size=CALIBRATION_BUFFER_SIZE * 34 * 4
+            size=CALIBRATION_BUFFER_SIZE * 34 * 4 ,
+            name=calib_name
         )
         self.calib_buffer = np.ndarray(
             (CALIBRATION_BUFFER_SIZE, 34), 
             dtype=np.float32, 
-            buffer=self.shm_calib.buf
+            buffer=self.shm_calib.buf,
+            
         )
         self.calib_buffer.fill(0)
         
