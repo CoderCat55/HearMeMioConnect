@@ -1,8 +1,6 @@
 # ToDo
-* modify calibrate function to send how many npy files have been saved in current calibration folder that starts with gesture name
-* Add a /deletecw endpoint which can take "name" as a value (string). This endpoint will delete all the npy files which starts with the value of "name" inside the current calibartion folder 
-
-Keep the current structure.
+Problem:
+I have set pf via webserver (and we are sure it saves calibration data to there)and hit train but it still trains the data on lastcb folder or doesnt update the pkl file
 
 DO NOT FORGET THE RULES
 

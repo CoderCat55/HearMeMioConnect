@@ -223,7 +223,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 sample_count = len(matching_files)
 
                 print(f"\nKALİBRASYON BAŞARILI! Kaydedilen: {save_len} sample...")
-                system._calibration_log(f"Saved sample #{sample_count} for {gesture_name}. Total: {sample_count}")
+            #   system._calibration_log(f"Saved sample #{sample_count} for {gesture_name}. Total: {sample_count}")
                 return sample_count # Return the count instead of True
         
         last_processed_idx = current_idx
@@ -613,6 +613,7 @@ class GestureSystem:
         self.rest_model = None
         self.gesture_model = None
         self._initialize_shared_memory()
+        self.current_user_folder = 'lastcb'  # Default folder
         self._load_models()
     
     def _initialize_shared_memory(self):
@@ -688,7 +689,7 @@ class GestureSystem:
                 
         except Exception as e:
             print(f"Note: Models not loaded yet ({e})")
-        self.current_user_folder = 'lastcb'  # Default folder
+        
     
     def set_personal_folder(self, name):
         """Set the folder for personal training/calibration"""
