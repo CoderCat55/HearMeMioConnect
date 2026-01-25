@@ -438,19 +438,11 @@ def Classify(stream_mem_name, stream_index, is_running_flag,Pis_running_flag, re
         last_processed_idx = current_idx
 
 def TrainPersonal(user_folder):
-    """Sadece belirtilmiş  klasöründeki verilerle PersonalModel'i eğitir"""
+    """Sadece 'user' klasöründeki verilerle PersonalModel'i eğitir"""
     import glob
     import os
     print(f"\n=== Training Personal Model (ptr) from '{user_folder}' ===")
     
-    # DELETE OLD MODEL FIRST (before training starts)
-    if os.path.exists('Pgesture_model.pkl'):
-        try:
-            os.remove('Pgesture_model.pkl')
-            print("✓ Deleted existing personal model file")
-        except Exception as e:
-            print(f"Warning: Could not delete old model: {e}")
-            
     if not os.path.exists(user_folder):
         print(f"❌ Error: '{user_folder}' folder not found. Please calibrate first (cb).")
         return False
