@@ -615,6 +615,7 @@ class GestureSystem:
         self.classify_process = None
         self.monitor_thread = None
         self.calibration_status_messages = None  # Current session messages
+        self.current_calibration_message = None
         self.calibration_lock = threading.Lock()
         # Models (for status checking)
         self.rest_model = None
