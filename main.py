@@ -607,13 +607,8 @@ class GestureSystem:
         self.data_process = None
         self.classify_process = None
         self.monitor_thread = None
-        self.calibration_status_message = None  # Current session messages
+        self.calibration_status_messages = None  # Current session messages
         self.calibration_lock = threading.Lock()
-        # NEW ADDITIONS (after existing calibration_lock):
-        self.calibration_thread = None
-        self.calibration_in_progress = False
-        self.current_gesture_name = None
-        self.current_calibration_message = None #meow
         # Models (for status checking)
         self.rest_model = None
         self.gesture_model = None
@@ -812,80 +807,26 @@ class GestureSystem:
         print("✓ Monitor thread started")
     
     def calibrate(self, gesture_name):
-        """Start calibration in background thread (non-blocking)"""
+        """Calibrate a gesture"""
         if not self.is_data_acquisition_running():
+            print("ERROR: Data acquisition not running")
             return False
-        
-        if self.calibration_in_progress:
-            return False
-        
-        # Reset and mark as started
-        with self.calibration_lock:
-            self.current_calibration_message = {
-                'message': f"Calibration started for '{gesture_name}'",
-                'timestamp': time.time(),
-                'status': 'started'
-            }
-            self.calibration_in_progress = True
-            self.current_gesture_name = gesture_name
-        
-        # Start calibration in background thread
-        self.calibration_thread = threading.Thread(
-            target=self._calibrate_worker,
-            args=(gesture_name,),
-            daemon=True
-        )
-        self.calibration_thread.start()
-        return True
-    
-    def _calibrate_worker(self, gesture_name):
-        """Background worker that runs Calibrate() and stores result"""
-        import time
         try:
-            result = Calibrate(
-                gesture_name,
-                self.stream_buffer,
-                self.stream_index,
-                self.calib_buffer, 
-                self.calib_index,
-                self.recording_flag, 
-                self.recording_gesture,
-                self.current_user_folder,
-                system=self
-            )
-            
-            # Store final result in current_calibration_message
-            with self.calibration_lock:
-                if result is False:
-                    self.current_calibration_message = {
-                        'message': 'Calibration failed or timed out',
-                        'timestamp': time.time(),
-                        'status': 'failed',
-                        'gesture_name': gesture_name,
-                        'nextcal': 'notok'
-                    }
-                else:
-                    # result is the sample count
-                    self.current_calibration_message = {
-                        'message': f"Sample saved. Total for '{gesture_name}': {result}",
-                        'timestamp': time.time(),
-                        'status': 'success',
-                        'gesture_name': gesture_name,
-                        'total_samples': result,
-                        'nextcal': 'ok'
-                    }
-                self.calibration_in_progress = False
-                
+            success = Calibrate(
+            gesture_name,
+            self.stream_buffer,
+            self.stream_index,
+            self.calib_buffer, 
+            self.calib_index,
+            self.recording_flag, 
+            self.recording_gesture,
+            self.current_user_folder,
+            system=self)
+            return success
         except Exception as e:
-            with self.calibration_lock:
-                self.current_calibration_message = {
-                    'message': f'Calibration error: {str(e)}',
-                    'timestamp': time.time(),
-                    'status': 'failed',
-                    'gesture_name': gesture_name,
-                    'nextcal': 'notok'
-                }
-                self.calibration_in_progress = False
+            print(f"Calibration failed: {e}")
+            return False
+    
     def delete_gesture_samples(self, gesture_name):
         """Deletes all .npy files for a specific gesture in the current folder"""
         import glob

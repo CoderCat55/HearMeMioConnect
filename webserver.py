@@ -354,7 +354,7 @@ def Personaltrain():
     
 @app.route('/setcw')
 def setcw():
-    """Start calibration for a gesture (non-blocking, returns immediately)"""
+    """Save calibration sample for a gesture (using rest-to-rest detection)"""
     if _system is None:
         return jsonify({
             "status": "error",
@@ -380,28 +380,26 @@ def setcw():
             "message": "Data acquisition not running. Call /connect first."
         }), 400
     
-    # Check if calibration already in progress
-    if _system.calibration_in_progress:
-        return jsonify({
-            "status": "error",
-            "message": "Calibration already in progress. Check /calibration_status"
-        }), 400
-    
-    # Start calibration (non-blocking)
+    # Note: calibrate() now uses rest-to-rest detection (30s timeout)
     success = _system.calibrate(gesture_name)
     
-    if success:
+    #
+    if success is not False:
+    # Count samples for THIS specific gesture
         return jsonify({
-            "status": "started",
-            "message": f"Calibration started for '{gesture_name}'. Poll /calibration_status for progress.",
-            "gesture_name": gesture_name
+            "status": "success",
+            "message": f"Sample saved. Total for '{gesture_name}': {result}",
+            "gesture_name": gesture_name,
+            "total_samples": result, # Use the count returned by the function
+            "nextcal": "ok"
         })
     else:
         return jsonify({
             "status": "error",
-            "message": "Failed to start calibration (check if data acquisition is running)"
+            "message": "Calibration failed or timed out (30s limit)",
+            "nextcal": "notok"
         }), 500
-    
+
 @app.route('/deletecw')
 def deletecw():
     """Delete all npy files starting with 'name' in current calibration folder"""
@@ -507,42 +505,17 @@ def set_personal_folder():
 
 @app.route('/calibration_status')
 def calibration_status():
-    """Get current calibration status (progress messages + final result)"""
     if _system is None:
         return jsonify({"status": "error", "message": "System not initialized"}), 500
     
     with _system.calibration_lock:
         msg = _system.current_calibration_message
-        in_progress = _system.calibration_in_progress
-        gesture_name = _system.current_gesture_name
     
     if not msg:
-        return jsonify({
-            "status": "idle",
-            "message": "No calibration in progress"
-        })
+        return jsonify({"status": "no_calibration", "message": "No calibration in progress"})
     
-    # Return the message with its status
-    response = {
-        "status": msg.get('status', 'in_progress'),
-        "message": msg['message'],
-        "timestamp": msg['timestamp'],
-        "gesture_name": gesture_name
-    }
-    
-    # If calibration is complete (success or failed), add extra fields
-    if msg.get('status') == 'success':
-        response['total_samples'] = msg.get('total_samples', 0)
-        response['nextcal'] = msg.get('nextcal', 'ok')
-    elif msg.get('status') == 'failed':
-        response['nextcal'] = msg.get('nextcal', 'notok')
-    # NEW: RESET after reading if calibration is complete (one-time consumption)
-    if not in_progress and msg.get('status') in ['success', 'failed']:
-        with _system.calibration_lock:
-            _system.current_calibration_message = None
-            _system.current_gesture_name = None
-    
-    return jsonify(response)
+    return jsonify({"status": "success", "message": msg['message'], "timestamp": msg['timestamp']})
+
 @app.route('/status')
 def status():
     """Get system status"""
