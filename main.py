@@ -224,7 +224,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
 
                 print(f"\nKALİBRASYON BAŞARILI! Kaydedilen: {save_len} sample...")
                 system._calibration_log(f"Saved sample #{sample_count} for {gesture_name}. Total: {sample_count}")
-                return sample_count # Return the count instead of True
+                return True
         
         last_processed_idx = current_idx
 
@@ -443,6 +443,13 @@ def TrainPersonal(user_folder):
     import os
     print(f"\n=== Training Personal Model (ptr) from '{user_folder}' ===")
     
+    if os.path.exists('Pgesture_model.pkl'):
+        try:
+            os.remove('Pgesture_model.pkl')
+            print("✓ Deleted existing personal model file")
+        except Exception as e:
+            print(f"Warning: Could not delete old model: {e}")
+        
     if not os.path.exists(user_folder):
         print(f"❌ Error: '{user_folder}' folder not found. Please calibrate first (cb).")
         return False

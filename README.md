@@ -1,6 +1,8 @@
 # ToDo
-Problem:
-I have set pf via webserver (and we are sure it saves calibration data to there)and hit train but it still trains the data on lastcb folder or doesnt update the pkl file
+What I want to do:
+I want to trigger setcw endpoint to start calibration then poll calibration_status to show user instructions like rest is detected you may perform the gesture,gesture is done there is 4 files for this gesture etc.
+
+I think we will need threading for this approach to work.
 
 DO NOT FORGET THE RULES
 

@@ -388,7 +388,7 @@ def setcw():
     # Count samples for THIS specific gesture
         return jsonify({
             "status": "success",
-            "message": f"Sample saved. Total for '{gesture_name}': {result}",
+            "message": f"Sample saved for '{gesture_name}'",
             "gesture_name": gesture_name,
             "total_samples": result, # Use the count returned by the function
             "nextcal": "ok"
