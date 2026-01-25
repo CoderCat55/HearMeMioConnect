@@ -930,9 +930,28 @@ class GestureSystem:
     def train_models(self):
         """Train both models"""
         try:
+            # Stop classification first
+            was_running = self.is_classification_running()
+            self.stop_classification()
+            
+            # Terminate and restart classification process to reload models
+            if self.classify_process and self.classify_process.is_alive():
+                self.classify_process.terminate()
+                self.classify_process.join(timeout=2)
+            
+            # Train
             success = Train()
+            
             if success:
-                self._load_models()  # Reload models after training
+                self._load_models()  # Reload in main process
+                
+                # Restart classification process with new models
+                self.start_classification_process()
+                
+                # Resume if it was running before
+                if was_running:
+                    self.start_classification()
+                    
             return success
         except Exception as e:
             print(f"Training failed: {e}")
@@ -940,14 +959,27 @@ class GestureSystem:
     def train_personal_model(self):
         """Train only the personal model"""
         try:
+            was_running_personal = self.is_personal_classification_running()
+            self.stop_personal_classification()
+            
+            if self.classify_process and self.classify_process.is_alive():
+                self.classify_process.terminate()
+                self.classify_process.join(timeout=2)
+            
             success = TrainPersonal(self.current_user_folder)
+            
             if success:
-                self._load_models()  # Reload models after training
+                self._load_models()
+                self.start_classification_process()
+                
+                if was_running_personal:
+                    self.start_personal_classification()
+                    
             return success
         except Exception as e:
             print(f"Personal training failed: {e}")
             return False
-    
+        
     def _calibration_log(self, message):
         """Log calibration message to queue and console"""
         print(message)  # Console output
