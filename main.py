@@ -622,6 +622,10 @@ class GestureSystem:
         self._initialize_shared_memory()
         self.current_user_folder = 'lastcb'  # Default folder
         self._load_models()
+
+        self.calibration_thread = None
+        self.calibration_queue = queue.Queue(maxsize=50)  # Status message history
+        self.calibration_active = threading.Event()  # Signal when calibration is running
     
     def _initialize_shared_memory(self):
         """Create all shared memory structures"""
@@ -813,27 +817,81 @@ class GestureSystem:
         self.monitor_thread.start()
         print("✓ Monitor thread started")
     
+
     def calibrate(self, gesture_name):
-        """Calibrate a gesture"""
+        """Start calibration in background thread"""
         if not self.is_data_acquisition_running():
-            print("ERROR: Data acquisition not running")
             return False
+        
+        if self.calibration_thread and self.calibration_thread.is_alive():
+            self._calibration_log("ERROR: Calibration already in progress")
+            return False
+        
+        # Clear old messages
+        while not self.calibration_queue.empty():
+            try:
+                self.calibration_queue.get_nowait()
+            except queue.Empty:
+                break
+        
+        # Start calibration in background
+        self.calibration_active.set()
+        self.calibration_thread = threading.Thread(
+            target=self._run_calibration_background,
+            args=(gesture_name,),
+            daemon=True
+        )
+        self.calibration_thread.start()
+        return True
+    
+
+    def _run_calibration_background(self, gesture_name):
+        """Wrapper to run Calibrate() in thread and capture result"""
         try:
             success = Calibrate(
-            gesture_name,
-            self.stream_buffer,
-            self.stream_index,
-            self.calib_buffer, 
-            self.calib_index,
-            self.recording_flag, 
-            self.recording_gesture,
-            self.current_user_folder,
-            system=self)
-            return success
+                gesture_name,
+                self.stream_buffer,
+                self.stream_index,
+                self.calib_buffer,
+                self.calib_index,
+                self.recording_flag,
+                self.recording_gesture,
+                self.current_user_folder,
+                system=self
+            )
+            
+            if success:
+                self._calibration_log(f"COMPLETE: Calibration successful for {gesture_name}")
+            else:
+                self._calibration_log(f"FAILED: Calibration failed or timed out")
         except Exception as e:
-            print(f"Calibration failed: {e}")
-            return False
-    
+            self._calibration_log(f"ERROR: {str(e)}")
+        finally:
+            self.calibration_active.clear()
+
+    def get_calibration_status(self):
+        """Get all calibration status messages"""
+        messages = []
+        temp_queue = queue.Queue()
+        
+        # Drain queue without losing messages
+        while not self.calibration_queue.empty():
+            try:
+                msg = self.calibration_queue.get_nowait()
+                messages.append(msg)
+                temp_queue.put(msg)
+            except queue.Empty:
+                break
+        
+        # Restore messages
+        while not temp_queue.empty():
+            self.calibration_queue.put(temp_queue.get())
+        
+        return {
+            'active': self.calibration_active.is_set(),
+            'messages': messages,
+            'latest': self.current_calibration_message
+        }
     def delete_gesture_samples(self, gesture_name):
         """Deletes all .npy files for a specific gesture in the current folder"""
         import glob
@@ -888,16 +946,31 @@ class GestureSystem:
         except Exception as e:
             print(f"Personal training failed: {e}")
             return False
+    
     def _calibration_log(self, message):
-        """Log calibration message"""
-        print(message)  # Keep console output
+        """Log calibration message to queue and console"""
+        print(message)  # Console output
         
+        import time
+        msg_obj = {
+            'message': message,
+            'timestamp': time.time()
+        }
+        
+        # Store to queue (thread-safe)
+        try:
+            self.calibration_queue.put_nowait(msg_obj)
+        except queue.Full:
+            # Remove oldest if full
+            try:
+                self.calibration_queue.get_nowait()
+                self.calibration_queue.put_nowait(msg_obj)
+            except:
+                pass
+        
+        # Also keep latest for quick access
         with self.calibration_lock:
-            import time
-            self.current_calibration_message = {
-                'message': message,
-                'timestamp': time.time()
-            }
+            self.current_calibration_message = msg_obj
     def cleanup(self):
         """Clean up all resources"""
         print("Cleaning up...")
