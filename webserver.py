@@ -410,6 +410,25 @@ def deletecw():
             "deleted_count": deleted_count
         })
 
+@app.route('/stopcb')
+def stopcb():
+    """Stop ongoing calibration"""
+    if _system is None:
+        return jsonify({"status": "error", "message": "System not initialized"}), 500
+    
+    success = _system.stop_calibration()
+    
+    if success:
+        return jsonify({
+            "status": "success",
+            "message": "Calibration stopped"
+        })
+    else:
+        return jsonify({
+            "status": "info",
+            "message": "No calibration was running"
+        })
+    
 @app.route('/Gsetcw')
 def Generalsetcw():
     """Save calibration sample for general model (timed recording)"""

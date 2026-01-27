@@ -104,7 +104,7 @@ def get_recent_data_from_shared_mem(stream_buffer, stream_index, window_seconds=
 
 
 def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_index, 
-              recording_flag, recording_gesture,user_folder, system=None):
+              recording_flag, recording_gesture,user_folder, system=None,stop_flag=None):
     """
     Hassas Rest-to-Rest kalibrasyonu: Sadece REST_THRESHOLD (stabilizasyon) korumalı, 
     hareket algılandığı an gecikmesiz kayda başlayan sürüm.
@@ -139,6 +139,11 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
     print("Sistem stabilize ediliyor, lütfen elinizi DİNLENME konumunda tutun...")
     system._calibration_log(f"System stablizing please keep your hand at 'rest' position")
     while True:
+        if stop_flag and stop_flag.is_set():
+            print("\n⚠️ Calibration stopped by user")
+            system._calibration_log("Calibration stopped by user")
+            return False
+        
         if time.time() - start_time > timeout:
             print("\n❌ ZAMAN AŞIMI: Kalibrasyon iptal edildi.")
             system._calibration_log(f"Timeout,Cancel calibraiton")
@@ -207,7 +212,10 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                         stream_buffer[g_start_wrapped:], 
                         stream_buffer[:g_end_wrapped]
                     ])
-                
+                if stop_flag and stop_flag.is_set():
+                    print("\n⚠️ Calibration stopped during recording - NOT saving incomplete data")
+                    system._calibration_log("Calibration stopped during recording - NOT saving incomplete data")
+                    return False
                 # Paylaşılan belleği (calib_buffer) güncelle
                 save_len = min(len(captured_data), len(calib_buffer))
                 calib_buffer[:save_len] = captured_data[:save_len]
@@ -627,7 +635,7 @@ class GestureSystem:
         self.calibration_thread = None
         self.calibration_queue = queue.Queue(maxsize=50)  # Status message history
         self.calibration_active = threading.Event()  # Signal when calibration is running
-    
+        self.calibration_stop_flag = threading.Event()
     def _initialize_shared_memory(self):
         """Create all shared memory structures"""
         # Define unique names for your segments
@@ -679,7 +687,7 @@ class GestureSystem:
         self.result_queue = mp.Queue()
         
         print("✓ Shared memory initialized")
-    
+  
     def _load_models(self):
         """Load trained models for status checking"""
         try:
@@ -834,7 +842,7 @@ class GestureSystem:
                 self.calibration_queue.get_nowait()
             except queue.Empty:
                 break
-        
+        self.calibration_stop_flag.clear()
         # Start calibration in background
         self.calibration_active.set()
         self.calibration_thread = threading.Thread(
@@ -844,7 +852,23 @@ class GestureSystem:
         )
         self.calibration_thread.start()
         return True
-    
+    def stop_calibration(self):
+        """Stop ongoing calibration"""
+        if not self.calibration_active.is_set():
+            return False  # No calibration running
+        
+        # Signal the calibration thread to stop
+        self.calibration_stop_flag.set()
+        
+        # Wait a bit for thread to respond
+        time.sleep(0.1)
+        
+        # Clear flags
+        self.calibration_active.clear()
+        self.calibration_stop_flag.clear()
+        
+        self._calibration_log("Calibration stopped by user request")
+        return True
 
     def _run_calibration_background(self, gesture_name):
         """Wrapper to run Calibrate() in thread and capture result"""
@@ -858,7 +882,8 @@ class GestureSystem:
                 self.recording_flag,
                 self.recording_gesture,
                 self.current_user_folder,
-                system=self
+                system=self,
+                stop_flag=self.calibration_stop_flag 
             )
             
             if success:
