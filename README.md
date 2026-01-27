@@ -1,8 +1,9 @@
 # ToDo
-What I want to do:
-I want to trigger setcw endpoint to start calibration then poll calibration_status to show user instructions like rest is detected you may perform the gesture,gesture is done there is 4 files for this gesture etc.
+* latest için calibration_log daki msg_obj direkt olarak gönderiliyor fakat ben direkt olarak yazılıyor latestte sadece message gözükse daha iyi olur çünkü ben latest keyini decode yapıyorum. Yani şunu diyorum "latest" keyinin içindeki message ve timestamp keyleri yerine "latest" keyinde sadece latestin altındaki message keyinin valuesu olsun. Make sure the changes you will do wont effect the overall functionality.
 
-I think we will need threading for this approach to work.
+* User might call /deletecw for the files that doesnt exist -this is allowed-, if file doesnt exist send the message as This file dont exist. There is no file to be deleted.
+
+* Add a endpoint /stopcb , this will stop an ongoing calibration,when called stop the ongoing calibration and if npy array is currently filling do not save that npy array
 
 DO NOT FORGET THE RULES
 

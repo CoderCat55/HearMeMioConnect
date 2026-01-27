@@ -397,11 +397,18 @@ def deletecw():
     
     deleted_count = _system.delete_gesture_samples(name)
     
-    return jsonify({
-        "status": "success",
-        "message": f"Deleted {deleted_count} samples for '{name}'",
-        "deleted_count": deleted_count
-    })
+    if deleted_count == 0:
+        return jsonify({
+            "status": "success",
+            "message": f"This file doesn't exist. There is no file to be deleted.",
+            "deleted_count": 0
+        })
+    else:
+        return jsonify({
+            "status": "success",
+            "message": f"Deleted {deleted_count} samples for '{name}'",
+            "deleted_count": deleted_count
+        })
 
 @app.route('/Gsetcw')
 def Generalsetcw():

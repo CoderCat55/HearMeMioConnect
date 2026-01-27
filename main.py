@@ -891,7 +891,7 @@ class GestureSystem:
         return {
             'active': self.calibration_active.is_set(),
             'messages': messages,
-            'latest': self.current_calibration_message
+            'latest': self.current_calibration_message['message'] if self.current_calibration_message else None
         }
     def delete_gesture_samples(self, gesture_name):
         """Deletes all .npy files for a specific gesture in the current folder"""
