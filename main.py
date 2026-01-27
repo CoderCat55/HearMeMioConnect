@@ -137,7 +137,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
     system._calibration_log(f"Calibration: {gesture_name}")
     print(f"{'='*50}")
     print("Sistem stabilize ediliyor, lütfen elinizi DİNLENME konumunda tutun...")
-    system._calibration_log(f"System stablizing please keep your hand at 'rest' position")
+    system._calibration_log(f"Keep your hands at 'REST' position. ")
     while True:
         if stop_flag and stop_flag.is_set():
             print("\n⚠️ Calibration stopped by user")
