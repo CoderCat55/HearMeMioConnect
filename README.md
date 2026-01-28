@@ -1,9 +1,4 @@
 # ToDo
-* latest için calibration_log daki msg_obj direkt olarak gönderiliyor fakat ben direkt olarak yazılıyor latestte sadece message gözükse daha iyi olur çünkü ben latest keyini decode yapıyorum. Yani şunu diyorum "latest" keyinin içindeki message ve timestamp keyleri yerine "latest" keyinde sadece latestin altındaki message keyinin valuesu olsun. Make sure the changes you will do wont effect the overall functionality.
-
-* User might call /deletecw for the files that doesnt exist -this is allowed-, if file doesnt exist send the message as This file dont exist. There is no file to be deleted.
-
-* Add a endpoint /stopcb , this will stop an ongoing calibration,when called stop the ongoing calibration and if npy array is currently filling do not save that npy array
 
 DO NOT FORGET THE RULES
 
@@ -21,7 +16,7 @@ Your aim is to discuss the structure with me. I need you to be objective. You sh
 
 When change of code only change what is relevant do not try to change anything that is not relevant with my aim. I need to know which parts you have made changes tell me because sometimes you change something inside a fucntion which I am not aware of.
 
-You may only write which parts of the code I should change and where changes shhould be made to save time instead of writing the whole script again.
+You may only write which parts of the code I should change and where changes should be made to save time instead of writing the whole script again.
 
 WHAT IS EXPECTED FROM THIS CODE. WHAT CAN IT DO. WHICH MISMATCHES HAVE YOU SPOTTED AS A LIST
 
