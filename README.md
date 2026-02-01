@@ -1,5 +1,5 @@
 # ToDo
-
+Translate every English text that is sent to webserver . Do not change the contents just translate them.
 DO NOT FORGET THE RULES
 
 # RULES: 

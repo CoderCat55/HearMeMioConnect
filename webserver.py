@@ -58,7 +58,7 @@ def index():
     sensor_data['connections'] += 1
     return jsonify({
         "status": "ok", 
-        "message": "Raspberry Pi Gesture Recognition Server",
+        "message": "Duybeni projesi",
         "data_acquisition_running": _system.is_data_acquisition_running() if _system else False
     })
 

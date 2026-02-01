@@ -134,19 +134,19 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
 
     print(f"\n{'='*50}")
     print(f"KALİBRASYON: {gesture_name}")
-    system._calibration_log(f"Calibration: {gesture_name}")
+    system._calibration_log(f"Kaydedilecek kelime : {gesture_name}")
     print(f"{'='*50}")
     print("Sistem stabilize ediliyor, lütfen elinizi DİNLENME konumunda tutun...")
-    system._calibration_log(f"Keep your hands at 'REST' position. ")
+    system._calibration_log(f"Elinizi DİNLENME konumunda tutun...")
     while True:
         if stop_flag and stop_flag.is_set():
             print("\n⚠️ Calibration stopped by user")
-            system._calibration_log("Calibration stopped by user")
+            system._calibration_log("Kaydetme durdu (kullanıcı tarafından)")
             return False
         
         if time.time() - start_time > timeout:
             print("\n❌ ZAMAN AŞIMI: Kalibrasyon iptal edildi.")
-            system._calibration_log(f"Timeout,Cancel calibraiton")
+            system._calibration_log(f"Kaydetme durdu zaman aşımı")
             return False
             
         current_idx = stream_index.value
@@ -177,7 +177,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                     state = "READY"
                     rest_counter = 0
                     print("✓ HAZIR! Hareketi yaptığınız an kayıt başlayacaktır...")
-                    system._calibration_log("Ready. The recording will start when you perform the gesture")
+                    system._calibration_log("Hazır hareketi yaptığınız an kayıt başlayacaktır...")
             else:
                 rest_counter = 0
 
@@ -187,7 +187,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 gesture_start_idx = current_idx - REST_WINDOW_SIZE
                 state = "RECORDING"
                 print(f"⚡ Hareket algılandı, kaydediliyor...")
-                system._calibration_log("Movement detected. Saving calibration....")
+                system._calibration_log("Hareket algılandı, kaydediliyor...")
 
         elif state == "RECORDING":
             if is_rest:
@@ -197,7 +197,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 
                 if duration < MIN_GESTURE_SAMPLES:
                     print(f"⚠️ Hareket çok kısa ({duration} sample), lütfen tekrar deneyin...")
-                    system._calibration_log(f"Gesture too short ({duration} sample), please try again...")
+                    system._calibration_log(f"Hareket çok kısa ({duration} sample), lütfen tekrar deneyin...")
                     state = "READY"
                     continue
                 
@@ -214,7 +214,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                     ])
                 if stop_flag and stop_flag.is_set():
                     print("\n⚠️ Calibration stopped during recording - NOT saving incomplete data")
-                    system._calibration_log("Calibration stopped during recording - NOT saving incomplete data")
+                    system._calibration_log("Kaydetme durdu ")
                     return False
                 # Paylaşılan belleği (calib_buffer) güncelle
                 save_len = min(len(captured_data), len(calib_buffer))
@@ -231,7 +231,7 @@ def Calibrate(gesture_name, stream_buffer, stream_index, calib_buffer, calib_ind
                 sample_count = len(matching_files)
 
                 print(f"\nKALİBRASYON BAŞARILI! Kaydedilen: {save_len} sample...")
-                system._calibration_log(f"Saved sample #{sample_count} for {gesture_name}.")
+                system._calibration_log(f"Başarılı kaydedildi {gesture_name} için {sample_count}.örnek ")
                 return True
         
         last_processed_idx = current_idx
@@ -833,7 +833,7 @@ class GestureSystem:
             return False
         
         if self.calibration_thread and self.calibration_thread.is_alive():
-            self._calibration_log("ERROR: Calibration already in progress")
+            self._calibration_log("Eror: Zaten kaydediyor")
             return False
         
         # Clear old messages
@@ -867,7 +867,7 @@ class GestureSystem:
         self.calibration_active.clear()
         self.calibration_stop_flag.clear()
         
-        self._calibration_log("Calibration stopped by user request")
+        self._calibration_log("Kaydetme durduruldu (kullanıcı tarafından)")
         return True
 
     def _run_calibration_background(self, gesture_name):
@@ -889,7 +889,7 @@ class GestureSystem:
             if success:
                 print(f"COMPLETE: Calibration successful for {gesture_name}")
             else:
-                self._calibration_log(f"FAILED: Calibration failed or timed out")
+                self._calibration_log(f"Kaydetme başarısız")
         except Exception as e:
             self._calibration_log(f"ERROR: {str(e)}")
         finally:
