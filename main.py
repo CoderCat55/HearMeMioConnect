@@ -629,7 +629,7 @@ class GestureSystem:
         self.rest_model = None
         self.gesture_model = None
         self._initialize_shared_memory()
-        self.current_user_folder = 'lastcb'  # Default folder
+        self.current_user_folder = 'user'  # Default folder
         self._load_models()
 
         self.calibration_thread = None
