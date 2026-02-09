@@ -1,0 +1,19 @@
+REST DETECTOR PERFORMANCE
+========================================
+Accuracy Score: 0.9922
+
+Confusion Matrix:
+[[ 411   14]
+ [  29 5063]]
+
+Detailed Classification Report:
+              precision    recall  f1-score   support
+
+        Rest       0.93      0.97      0.95       425
+    Non-Rest       1.00      0.99      1.00      5092
+
+    accuracy                           0.99      5517
+   macro avg       0.97      0.98      0.97      5517
+weighted avg       0.99      0.99      0.99      5517
+
+========================================
